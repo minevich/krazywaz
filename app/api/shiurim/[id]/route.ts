@@ -23,9 +23,11 @@ async function isAuthenticated(d1: D1Database) {
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
+
     // @ts-ignore - Cloudflare Workers types
     const d1: D1Database = request.env?.DB || (globalThis as any).DB
 
@@ -41,7 +43,7 @@ export async function GET(
     const shiur = await db
       .select()
       .from(shiurim)
-      .where(eq(shiurim.id, params.id))
+      .where(eq(shiurim.id, id))
       .get()
 
     if (!shiur) {
@@ -52,7 +54,7 @@ export async function GET(
     const links = await db
       .select()
       .from(platformLinks)
-      .where(eq(platformLinks.shiurId, params.id))
+      .where(eq(platformLinks.shiurId, id))
       .get()
 
     return NextResponse.json({
@@ -70,9 +72,11 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
+
     // @ts-ignore - Cloudflare Workers types
     const d1: D1Database = request.env?.DB || (globalThis as any).DB
 
@@ -117,7 +121,7 @@ export async function PUT(
     const updatedShiur = await db
       .update(shiurim)
       .set(updateData)
-      .where(eq(shiurim.id, params.id))
+      .where(eq(shiurim.id, id))
       .returning()
       .get()
 
@@ -126,7 +130,7 @@ export async function PUT(
       const existingLinks = await db
         .select()
         .from(platformLinks)
-        .where(eq(platformLinks.shiurId, params.id))
+        .where(eq(platformLinks.shiurId, id))
         .get()
 
       if (existingLinks) {
@@ -136,13 +140,13 @@ export async function PUT(
             ...data.platformLinks,
             updatedAt: new Date(),
           })
-          .where(eq(platformLinks.shiurId, params.id))
+          .where(eq(platformLinks.shiurId, id))
           .execute()
       } else {
         await db
           .insert(platformLinks)
           .values({
-            shiurId: params.id,
+            shiurId: id,
             ...data.platformLinks,
           })
           .execute()
@@ -153,7 +157,7 @@ export async function PUT(
     const links = await db
       .select()
       .from(platformLinks)
-      .where(eq(platformLinks.shiurId, params.id))
+      .where(eq(platformLinks.shiurId, id))
       .get()
 
     return NextResponse.json({
@@ -171,9 +175,11 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
+
     // @ts-ignore - Cloudflare Workers types
     const d1: D1Database = request.env?.DB || (globalThis as any).DB
 
@@ -190,7 +196,7 @@ export async function DELETE(
 
     const db = getDb(d1)
 
-    await db.delete(shiurim).where(eq(shiurim.id, params.id)).execute()
+    await db.delete(shiurim).where(eq(shiurim.id, id)).execute()
 
     return NextResponse.json({ success: true })
   } catch (error) {

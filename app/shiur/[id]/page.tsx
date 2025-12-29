@@ -30,8 +30,9 @@ async function getShiur(id: string) {
   }
 }
 
-export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
-  const shiur = await getShiur(params.id)
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params
+  const shiur = await getShiur(id)
 
   if (!shiur) {
     return {
@@ -68,8 +69,9 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
   }
 }
 
-export default async function ShiurPage({ params }: { params: { id: string } }) {
-  const shiur = await getShiur(params.id)
+export default async function ShiurPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  const shiur = await getShiur(id)
 
   if (!shiur) {
     notFound()

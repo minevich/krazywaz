@@ -41,9 +41,10 @@ async function getAllShiurim(page: number = 1) {
 export default async function ArchivePage({
   searchParams,
 }: {
-  searchParams: { page?: string }
+  searchParams: Promise<{ page?: string }>
 }) {
-  const page = parseInt(searchParams.page || '1', 10)
+  const { page: pageParam } = await searchParams
+  const page = parseInt(pageParam || '1', 10)
   const { shiurim, total, totalPages } = await getAllShiurim(page)
 
   return (

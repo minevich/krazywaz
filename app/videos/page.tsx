@@ -118,10 +118,11 @@ async function getVideos() {
 export default async function VideosPage({
   searchParams,
 }: {
-  searchParams: { page?: string }
+  searchParams: Promise<{ page?: string }>
 }) {
   const allVideos = await getVideos()
-  const page = parseInt(searchParams.page || '1', 10)
+  const { page: pageParam } = await searchParams
+  const page = parseInt(pageParam || '1', 10)
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50/50">
