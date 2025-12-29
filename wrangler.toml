@@ -1,4 +1,5 @@
 name = "rabbi-kraz"
+main = ".open-next/worker.js"
 compatibility_date = "2024-01-01"
 compatibility_flags = ["nodejs_compat"]
 
@@ -7,6 +8,11 @@ compatibility_flags = ["nodejs_compat"]
 binding = "DB"
 database_name = "rabbi-kraz-db"
 database_id = "" # Will be filled after creating D1 database
+
+# Assets configuration for OpenNext
+[assets]
+directory = ".open-next/assets"
+binding = "ASSETS"
 
 # Environment variables (set via dashboard or wrangler secret)
 [vars]
