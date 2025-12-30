@@ -16,4 +16,4 @@ binding = "ASSETS"
 
 # Environment variables (set via dashboard or wrangler secret)
 [vars]
-NEXT_PUBLIC_BASE_URL = "https://rabbi-kraz.pages.dev"
+NEXT_PUBLIC_BASE_URL = "https://krazywaz.rabbikraz1.workers.dev"
