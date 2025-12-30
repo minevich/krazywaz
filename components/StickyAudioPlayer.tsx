@@ -10,11 +10,15 @@ interface StickyAudioPlayerProps {
     }
 }
 
+const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]
+
 export default function StickyAudioPlayer({ shiur }: StickyAudioPlayerProps) {
     const [isPlaying, setIsPlaying] = useState(false)
     const [currentTime, setCurrentTime] = useState(0)
     const [duration, setDuration] = useState(0)
     const [isMinimized, setIsMinimized] = useState(false)
+    const [playbackRate, setPlaybackRate] = useState(1)
+    const [showSpeedMenu, setShowSpeedMenu] = useState(false)
     const audioRef = useRef<HTMLAudioElement>(null)
 
     useEffect(() => {
@@ -35,6 +39,12 @@ export default function StickyAudioPlayer({ shiur }: StickyAudioPlayerProps) {
             audio.removeEventListener('ended', handleEnded)
         }
     }, [])
+
+    useEffect(() => {
+        if (audioRef.current) {
+            audioRef.current.playbackRate = playbackRate
+        }
+    }, [playbackRate])
 
     const togglePlay = () => {
         const audio = audioRef.current
@@ -71,13 +81,13 @@ export default function StickyAudioPlayer({ shiur }: StickyAudioPlayerProps) {
                 <div className="fixed bottom-0 left-0 right-0 z-50 bg-primary text-white">
                     <button
                         onClick={() => setIsMinimized(false)}
-                        className="w-full py-1.5 flex items-center justify-center gap-2 text-xs hover:bg-primary/90 transition-colors"
+                        className="w-full py-2 flex items-center justify-center gap-2 text-sm hover:bg-primary/90 transition-colors"
                     >
                         <i className={`fas ${isPlaying ? 'fa-pause' : 'fa-play'}`}></i>
                         <span className="truncate max-w-[200px]">{shiur.title}</span>
                         <i className="fas fa-chevron-up ml-2"></i>
                     </button>
-                    <div className="h-0.5 bg-white/20">
+                    <div className="h-1 bg-white/20">
                         <div
                             className="h-full bg-white transition-all duration-300"
                             style={{ width: `${progress}%` }}
@@ -95,25 +105,50 @@ export default function StickyAudioPlayer({ shiur }: StickyAudioPlayerProps) {
                 {/* Minimize Button */}
                 <button
                     onClick={() => setIsMinimized(true)}
-                    className="absolute -top-6 right-4 bg-primary text-white px-2 py-0.5 rounded-t-md text-xs hover:bg-primary/90 transition-colors flex items-center gap-1"
+                    className="absolute -top-7 right-4 bg-primary text-white px-3 py-1 rounded-t-lg text-xs hover:bg-primary/90 transition-colors flex items-center gap-1"
                 >
-                    <i className="fas fa-chevron-down text-[10px]"></i>
+                    <i className="fas fa-chevron-down"></i>
                     Hide
                 </button>
 
-                {/* Thin layout for PC, slightly larger for mobile */}
-                <div className="max-w-5xl mx-auto px-4 py-1.5 md:py-1">
+                <div className="max-w-5xl mx-auto px-4 py-2 md:py-3">
                     <div className="flex items-center gap-3 md:gap-4">
-                        {/* Play button - smaller on PC */}
+                        {/* Rewind */}
+                        <button
+                            onClick={() => {
+                                if (audioRef.current) {
+                                    audioRef.current.currentTime = Math.max(0, currentTime - 15)
+                                }
+                            }}
+                            className="p-1.5 hover:bg-white/10 rounded-full transition-colors hidden sm:block"
+                            title="Rewind 15s"
+                        >
+                            <i className="fas fa-backward text-sm"></i>
+                        </button>
+
+                        {/* Play button */}
                         <button
                             onClick={togglePlay}
-                            className="w-8 h-8 md:w-7 md:h-7 bg-white text-primary rounded-full flex items-center justify-center hover:scale-105 transition-transform shadow flex-shrink-0"
+                            className="w-10 h-10 md:w-9 md:h-9 bg-white text-primary rounded-full flex items-center justify-center hover:scale-105 transition-transform shadow flex-shrink-0"
                         >
-                            <i className={`fas ${isPlaying ? 'fa-pause' : 'fa-play'} text-sm md:text-xs ${!isPlaying ? 'ml-0.5' : ''}`}></i>
+                            <i className={`fas ${isPlaying ? 'fa-pause' : 'fa-play'} text-base md:text-sm ${!isPlaying ? 'ml-0.5' : ''}`}></i>
+                        </button>
+
+                        {/* Forward */}
+                        <button
+                            onClick={() => {
+                                if (audioRef.current) {
+                                    audioRef.current.currentTime = Math.min(duration, currentTime + 15)
+                                }
+                            }}
+                            className="p-1.5 hover:bg-white/10 rounded-full transition-colors hidden sm:block"
+                            title="Forward 15s"
+                        >
+                            <i className="fas fa-forward text-sm"></i>
                         </button>
 
                         {/* Time */}
-                        <span className="text-xs opacity-80 w-10 md:w-8 text-right flex-shrink-0">{formatTime(currentTime)}</span>
+                        <span className="text-xs opacity-80 w-12 text-right flex-shrink-0">{formatTime(currentTime)}</span>
 
                         {/* Progress Bar */}
                         <div className="flex-1">
@@ -123,7 +158,7 @@ export default function StickyAudioPlayer({ shiur }: StickyAudioPlayerProps) {
                                 max={duration || 100}
                                 value={currentTime}
                                 onChange={handleSeek}
-                                className="w-full h-1.5 md:h-1 bg-white/20 rounded-lg appearance-none cursor-pointer accent-white"
+                                className="w-full h-2 bg-white/20 rounded-lg appearance-none cursor-pointer accent-white"
                                 style={{
                                     background: `linear-gradient(to right, white ${progress}%, rgba(255,255,255,0.2) ${progress}%)`
                                 }}
@@ -131,32 +166,34 @@ export default function StickyAudioPlayer({ shiur }: StickyAudioPlayerProps) {
                         </div>
 
                         {/* Duration */}
-                        <span className="text-xs opacity-80 w-10 md:w-8 flex-shrink-0">{formatTime(duration)}</span>
+                        <span className="text-xs opacity-80 w-12 flex-shrink-0">{formatTime(duration)}</span>
 
-                        {/* Skip buttons - hidden on very small screens */}
-                        <div className="hidden sm:flex items-center gap-1">
+                        {/* Speed control */}
+                        <div className="relative">
                             <button
-                                onClick={() => {
-                                    if (audioRef.current) {
-                                        audioRef.current.currentTime = Math.max(0, currentTime - 15)
-                                    }
-                                }}
-                                className="p-1 hover:bg-white/10 rounded transition-colors"
-                                title="Rewind 15s"
+                                onClick={() => setShowSpeedMenu(!showSpeedMenu)}
+                                className="px-2 py-1 text-xs font-medium bg-white/10 hover:bg-white/20 rounded transition-colors"
                             >
-                                <i className="fas fa-backward text-xs"></i>
+                                {playbackRate}x
                             </button>
-                            <button
-                                onClick={() => {
-                                    if (audioRef.current) {
-                                        audioRef.current.currentTime = Math.min(duration, currentTime + 15)
-                                    }
-                                }}
-                                className="p-1 hover:bg-white/10 rounded transition-colors"
-                                title="Forward 15s"
-                            >
-                                <i className="fas fa-forward text-xs"></i>
-                            </button>
+
+                            {showSpeedMenu && (
+                                <div className="absolute bottom-full right-0 mb-2 bg-white text-gray-800 rounded-lg shadow-xl overflow-hidden">
+                                    {SPEEDS.map((speed) => (
+                                        <button
+                                            key={speed}
+                                            onClick={() => {
+                                                setPlaybackRate(speed)
+                                                setShowSpeedMenu(false)
+                                            }}
+                                            className={`block w-full px-4 py-2 text-sm hover:bg-gray-100 text-left ${playbackRate === speed ? 'bg-primary text-white' : ''
+                                                }`}
+                                        >
+                                            {speed}x
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
