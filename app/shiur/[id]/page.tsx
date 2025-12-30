@@ -10,7 +10,7 @@ import SourceSheetViewer from '@/components/SourceSheetViewer'
 // Mark as dynamic to avoid build-time database access
 export const dynamic = 'force-dynamic'
 export const revalidate = 60
-export const runtime = 'edge'
+
 
 async function getShiur(id: string) {
   try {

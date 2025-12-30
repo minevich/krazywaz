@@ -7,7 +7,7 @@ import { Calendar, Clock, Info } from 'lucide-react'
 // Mark as dynamic to avoid build-time database access
 export const dynamic = 'force-dynamic'
 export const revalidate = 60
-export const runtime = 'edge'
+
 
 const ITEMS_PER_PAGE = 18
 

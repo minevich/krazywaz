@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createUser } from '@/lib/auth'
 
-export const runtime = 'edge'
+
 
 /**
  * One-time admin user creation endpoint

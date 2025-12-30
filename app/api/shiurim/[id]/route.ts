@@ -4,7 +4,7 @@ import { shiurim, platformLinks, users } from '@/lib/schema'
 import { cookies } from 'next/headers'
 import { eq } from 'drizzle-orm'
 
-export const runtime = 'edge'
+
 
 async function isAuthenticated(d1: D1Database) {
   const cookieStore = await cookies()

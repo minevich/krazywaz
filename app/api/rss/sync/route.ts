@@ -5,7 +5,7 @@ import { getDb } from '@/lib/db'
 import { users } from '@/lib/schema'
 import { eq } from 'drizzle-orm'
 
-export const runtime = 'edge'
+
 
 async function isAuthenticated(d1: D1Database) {
   const cookieStore = await cookies()
