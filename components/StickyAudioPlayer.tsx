@@ -78,22 +78,14 @@ export default function StickyAudioPlayer({ shiur }: StickyAudioPlayerProps) {
         return (
             <>
                 <audio ref={audioRef} src={shiur.audioUrl} preload="metadata" />
-                <div className="fixed bottom-0 left-0 right-0 z-50 bg-primary text-white">
-                    <button
-                        onClick={() => setIsMinimized(false)}
-                        className="w-full py-2 flex items-center justify-center gap-2 text-sm hover:bg-primary/90 transition-colors"
-                    >
-                        <i className={`fas ${isPlaying ? 'fa-pause' : 'fa-play'}`}></i>
-                        <span className="truncate max-w-[200px]">{shiur.title}</span>
-                        <i className="fas fa-chevron-up ml-2"></i>
-                    </button>
-                    <div className="h-1 bg-white/20">
-                        <div
-                            className="h-full bg-white transition-all duration-300"
-                            style={{ width: `${progress}%` }}
-                        />
-                    </div>
-                </div>
+                <button
+                    onClick={() => setIsMinimized(false)}
+                    className="fixed bottom-0 right-4 z-50 bg-primary text-white px-4 py-2 rounded-t-lg text-sm hover:bg-primary/90 transition-colors flex items-center gap-2 shadow-lg"
+                >
+                    <i className={`fas ${isPlaying ? 'fa-pause' : 'fa-play'}`}></i>
+                    Player
+                    <i className="fas fa-chevron-up"></i>
+                </button>
             </>
         )
     }
