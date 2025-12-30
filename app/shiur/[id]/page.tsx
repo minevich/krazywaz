@@ -6,24 +6,46 @@ import Header from '@/components/Header'
 import ShiurAudioPlayer from '@/components/ShiurAudioPlayer'
 import PlatformLinks from '@/components/PlatformLinks'
 import SourceSheetViewer from '@/components/SourceSheetViewer'
+import { getDb, getD1Database } from '@/lib/db'
+import { shiurim, platformLinks } from '@/lib/schema'
+import { eq } from 'drizzle-orm'
 
 // Mark as dynamic to avoid build-time database access
 export const dynamic = 'force-dynamic'
 export const revalidate = 60
 
-
 async function getShiur(id: string) {
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
-    const res = await fetch(`${baseUrl}/api/shiurim/${id}`, {
-      next: { revalidate: 60 },
-    })
+    const d1 = await getD1Database()
 
-    if (!res.ok) {
+    if (!d1) {
+      console.error('D1 database not available')
       return null
     }
 
-    return await res.json() as any
+    const db = getDb(d1)
+
+    const shiur = await db
+      .select()
+      .from(shiurim)
+      .where(eq(shiurim.id, id))
+      .get()
+
+    if (!shiur) {
+      return null
+    }
+
+    // Fetch platform links
+    const links = await db
+      .select()
+      .from(platformLinks)
+      .where(eq(platformLinks.shiurId, id))
+      .get()
+
+    return {
+      ...shiur,
+      platformLinks: links || null,
+    }
   } catch (error) {
     console.error('Error fetching shiur:', error)
     return null
@@ -179,4 +201,3 @@ export default async function ShiurPage({ params }: { params: Promise<{ id: stri
     </div>
   )
 }
-

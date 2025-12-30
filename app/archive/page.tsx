@@ -3,32 +3,56 @@ import { formatDate, formatDuration } from '@/lib/utils'
 import Header from '@/components/Header'
 import PlayButton from '@/components/PlayButton'
 import { Calendar, Clock, Info } from 'lucide-react'
+import { getDb, getD1Database } from '@/lib/db'
+import { shiurim, platformLinks } from '@/lib/schema'
+import { desc, eq } from 'drizzle-orm'
 
 // Mark as dynamic to avoid build-time database access
 export const dynamic = 'force-dynamic'
 export const revalidate = 60
 
-
 const ITEMS_PER_PAGE = 18
 
 async function getAllShiurim(page: number = 1) {
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
-    const res = await fetch(`${baseUrl}/api/shiurim`, {
-      next: { revalidate: 60 },
-    })
+    const d1 = await getD1Database()
 
-    if (!res.ok) {
+    if (!d1) {
+      console.error('D1 database not available')
       return { shiurim: [], total: 0, totalPages: 0 }
     }
 
-    const allShiurim = await res.json() as any[]
+    const db = getDb(d1)
+
+    // Get total count
+    const allShiurimData = await db
+      .select()
+      .from(shiurim)
+      .orderBy(desc(shiurim.pubDate))
+      .all()
+
+    const total = allShiurimData.length
     const skip = (page - 1) * ITEMS_PER_PAGE
-    const shiurim = allShiurim.slice(skip, skip + ITEMS_PER_PAGE)
-    const total = allShiurim.length
+    const paginatedShiurim = allShiurimData.slice(skip, skip + ITEMS_PER_PAGE)
+
+    // Fetch platform links for each shiur
+    const shiurimWithLinks = await Promise.all(
+      paginatedShiurim.map(async (shiur) => {
+        const links = await db
+          .select()
+          .from(platformLinks)
+          .where(eq(platformLinks.shiurId, shiur.id))
+          .get()
+
+        return {
+          ...shiur,
+          platformLinks: links || null,
+        }
+      })
+    )
 
     return {
-      shiurim,
+      shiurim: shiurimWithLinks,
       total,
       totalPages: Math.ceil(total / ITEMS_PER_PAGE),
     }
@@ -45,7 +69,7 @@ export default async function ArchivePage({
 }) {
   const { page: pageParam } = await searchParams
   const page = parseInt(pageParam || '1', 10)
-  const { shiurim, total, totalPages } = await getAllShiurim(page)
+  const { shiurim: shiurimList, total, totalPages } = await getAllShiurim(page)
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50/50">
@@ -60,14 +84,14 @@ export default async function ArchivePage({
           </p>
         </div>
 
-        {shiurim.length === 0 ? (
+        {shiurimList.length === 0 ? (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 md:p-12 text-center">
             <p className="text-gray-600">No shiurim available.</p>
           </div>
         ) : (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-              {shiurim.map((shiur: any) => (
+              {shiurimList.map((shiur: any) => (
                 <div
                   key={shiur.id}
                   className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow border border-gray-100 overflow-hidden flex flex-col h-full group"
@@ -166,4 +190,3 @@ export default async function ArchivePage({
     </div>
   )
 }
-

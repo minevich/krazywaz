@@ -4,27 +4,50 @@ import Header from '@/components/Header'
 import PlayButton from '@/components/PlayButton'
 import PlatformGrid from '@/components/PlatformGrid'
 import { Calendar, Clock, Info } from 'lucide-react'
+import { getDb, getD1Database } from '@/lib/db'
+import { shiurim, platformLinks } from '@/lib/schema'
+import { desc, eq } from 'drizzle-orm'
 
 // Mark as dynamic to avoid build-time database access
 export const dynamic = 'force-dynamic'
 export const revalidate = 60 // Revalidate every 60 seconds
 
-
 async function getLatestShiurim() {
   try {
-    // Fetch from internal API route
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
-    const res = await fetch(`${baseUrl}/api/shiurim`, {
-      next: { revalidate: 60 },
-    })
+    const d1 = await getD1Database()
 
-    if (!res.ok) {
-      console.error('Failed to fetch shiurim:', res.statusText)
+    if (!d1) {
+      console.error('D1 database not available')
       return []
     }
 
-    const shiurim = await res.json() as any[]
-    return shiurim.slice(0, 9) // Take latest 9
+    const db = getDb(d1)
+
+    // Fetch latest 9 shiurim directly from database
+    const allShiurim = await db
+      .select()
+      .from(shiurim)
+      .orderBy(desc(shiurim.pubDate))
+      .limit(9)
+      .all()
+
+    // Fetch platform links for each shiur
+    const shiurimWithLinks = await Promise.all(
+      allShiurim.map(async (shiur) => {
+        const links = await db
+          .select()
+          .from(platformLinks)
+          .where(eq(platformLinks.shiurId, shiur.id))
+          .get()
+
+        return {
+          ...shiur,
+          platformLinks: links || null,
+        }
+      })
+    )
+
+    return shiurimWithLinks
   } catch (error) {
     console.error('Error fetching shiurim:', error)
     return []
@@ -32,7 +55,7 @@ async function getLatestShiurim() {
 }
 
 export default async function Home() {
-  const shiurim = await getLatestShiurim()
+  const latestShiurim = await getLatestShiurim()
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50/50">
@@ -55,7 +78,7 @@ export default async function Home() {
             </h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {shiurim.map((shiur: any) => (
+            {latestShiurim.map((shiur: any) => (
               <div
                 key={shiur.id}
                 className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow border border-gray-100 overflow-hidden flex flex-col h-full group"
@@ -168,4 +191,3 @@ export default async function Home() {
     </div>
   )
 }
-
