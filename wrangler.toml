@@ -7,7 +7,7 @@ compatibility_flags = ["nodejs_compat"]
 [[d1_databases]]
 binding = "DB"
 database_name = "rabbi-kraz-db"
-database_id = "" # Will be filled after creating D1 database
+database_id = "ed0b9cd5-86e2-4a75-a375-cd12903a2da4"
 
 # Assets configuration for OpenNext
 [assets]
