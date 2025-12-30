@@ -14,6 +14,7 @@ interface Shiur {
   pubDate?: string
   duration?: string | null
   link?: string | null
+  thumbnail?: string | null
   platformLinks?: {
     youtube?: string | null
     youtubeMusic?: string | null
@@ -44,6 +45,7 @@ export default function ShiurForm({ shiur, onSuccess, onCancel }: ShiurFormProps
     pubDate: shiur?.pubDate ? new Date(shiur.pubDate).toISOString().split('T')[0] : '',
     duration: shiur?.duration || '',
     link: shiur?.link || '',
+    thumbnail: (shiur as any)?.thumbnail || '',
     youtube: shiur?.platformLinks?.youtube || '',
     youtubeMusic: shiur?.platformLinks?.youtubeMusic || '',
     spotify: shiur?.platformLinks?.spotify || '',
@@ -74,6 +76,7 @@ export default function ShiurForm({ shiur, onSuccess, onCancel }: ShiurFormProps
         pubDate: formData.pubDate || new Date().toISOString(),
         duration: formData.duration || undefined,
         link: formData.link || undefined,
+        thumbnail: formData.thumbnail || undefined,
         platformLinks: {
           youtube: formData.youtube || undefined,
           youtubeMusic: formData.youtubeMusic || undefined,
@@ -155,7 +158,7 @@ export default function ShiurForm({ shiur, onSuccess, onCancel }: ShiurFormProps
               Custom URL Slug
             </label>
             <div className="flex items-center">
-              <span className="text-gray-500 text-sm mr-2">/s/</span>
+              <span className="text-gray-500 text-sm mr-2">/</span>
               <input
                 type="text"
                 value={formData.slug}
@@ -164,7 +167,7 @@ export default function ShiurForm({ shiur, onSuccess, onCancel }: ShiurFormProps
                 className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
               />
             </div>
-            <p className="text-xs text-gray-500 mt-1">Optional. Creates a short memorable URL like /s/dreams</p>
+            <p className="text-xs text-gray-500 mt-1">Optional. Creates a short memorable URL like /dreams</p>
           </div>
 
           <div>
@@ -228,6 +231,20 @@ export default function ShiurForm({ shiur, onSuccess, onCancel }: ShiurFormProps
               onChange={(e) => setFormData({ ...formData, sourceDoc: e.target.value })}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Thumbnail URL (for WhatsApp/Social sharing)
+            </label>
+            <input
+              type="url"
+              value={formData.thumbnail}
+              onChange={(e) => setFormData({ ...formData, thumbnail: e.target.value })}
+              placeholder="https://example.com/image.jpg"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+            />
+            <p className="text-xs text-gray-500 mt-1">Image shown when sharing on WhatsApp, Twitter, etc.</p>
           </div>
         </div>
 

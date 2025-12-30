@@ -27,6 +27,7 @@ export const shiurim = sqliteTable('shiurim', {
     pubDate: integer('pub_date', { mode: 'timestamp' }).notNull(),
     duration: text('duration'),
     link: text('link'),
+    thumbnail: text('thumbnail'), // URL to thumbnail image for social sharing
     createdAt: integer('created_at', { mode: 'timestamp' })
         .notNull()
         .$defaultFn(() => new Date()),

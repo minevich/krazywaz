@@ -95,6 +95,7 @@ export async function PUT(
       pubDate?: string
       duration?: string
       link?: string
+      thumbnail?: string
       platformLinks?: any
     }
     const data = body
@@ -112,6 +113,7 @@ export async function PUT(
     if (data.pubDate !== undefined) updateData.pubDate = new Date(data.pubDate)
     if (data.duration !== undefined) updateData.duration = data.duration
     if (data.link !== undefined) updateData.link = data.link
+    if (data.thumbnail !== undefined) updateData.thumbnail = data.thumbnail || null
     updateData.updatedAt = new Date()
 
     const updatedShiur = await db

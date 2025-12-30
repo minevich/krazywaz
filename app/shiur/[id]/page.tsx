@@ -2,10 +2,9 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import { formatDate, formatDuration, extractYouTubeVideoId, getYouTubeThumbnail } from '@/lib/utils'
-import Header from '@/components/Header'
-import ShiurAudioPlayer from '@/components/ShiurAudioPlayer'
 import PlatformLinks from '@/components/PlatformLinks'
 import SourceSheetViewer from '@/components/SourceSheetViewer'
+import StickyAudioPlayer from '@/components/StickyAudioPlayer'
 import { getDb, getD1Database } from '@/lib/db'
 import { shiurim, platformLinks } from '@/lib/schema'
 import { eq } from 'drizzle-orm'
@@ -54,7 +53,7 @@ async function getShiur(id: string) {
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params
-  const shiur = await getShiur(id)
+  const shiur = await getShiur(id) as any
 
   if (!shiur) {
     return {
@@ -62,9 +61,9 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     }
   }
 
-  // Extract YouTube video ID and get thumbnail
+  // Use custom thumbnail first, then YouTube, then fallback
   const youtubeVideoId = extractYouTubeVideoId(shiur.platformLinks?.youtube || shiur.link)
-  const thumbnailUrl = getYouTubeThumbnail(youtubeVideoId)
+  const thumbnailUrl = shiur.thumbnail || getYouTubeThumbnail(youtubeVideoId)
 
   return {
     title: `${shiur.title} — Rabbi Kraz's Shiurim`,
@@ -93,111 +92,110 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
 export default async function ShiurPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const shiur = await getShiur(id)
+  const shiur = await getShiur(id) as any
 
   if (!shiur) {
     notFound()
   }
 
-  // Format description with line breaks - strip HTML and preserve line structure
-  const formatDescription = (desc: string | null | undefined): string[] => {
-    if (!desc) return []
-    // First, convert common HTML line breaks to newlines
-    let text = desc
-      .replace(/<br\s*\/?>/gi, '\n')
-      .replace(/<\/p>/gi, '\n')
-      .replace(/<p[^>]*>/gi, '')
-      .replace(/<\/div>/gi, '\n')
-      .replace(/<div[^>]*>/gi, '')
-      .replace(/<\/li>/gi, '\n')
-      .replace(/<li[^>]*>/gi, '• ')
-
-    // Strip remaining HTML tags
-    text = text.replace(/<[^>]*>/g, '')
-
-    // Decode HTML entities
-    text = text
-      .replace(/&nbsp;/g, ' ')
-      .replace(/&amp;/g, '&')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'")
-
-    // Split into lines and clean up
-    return text
-      .split('\n')
-      .map(line => line.trim())
-      .filter(line => line.length > 0)
-  }
-
-  const formattedDescription = formatDescription(shiur.description)
-
   return (
     <div className="min-h-screen flex flex-col bg-gray-50/50">
-      <Header />
-      <main className="flex-1 w-full max-w-7xl mx-auto px-4 py-4 md:py-8">
-        <Link
-          href="/"
-          className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary mb-4 md:mb-8 transition-colors"
-        >
-          ← Back to Shiurim
-        </Link>
+      {/* Compact Header for Mobile */}
+      <header className="bg-primary text-white py-2 md:py-4">
+        <div className="max-w-5xl mx-auto px-4 flex items-center justify-between">
+          <Link href="/" className="font-serif text-lg md:text-2xl font-semibold hover:text-blue-200 transition-colors">
+            Rabbi Kraz's Shiurim
+          </Link>
+          <nav className="flex items-center gap-3 md:gap-6 text-xs md:text-sm">
+            <Link href="/" className="hover:text-blue-200 transition-colors">Home</Link>
+            <Link href="/archive" className="hover:text-blue-200 transition-colors">Archive</Link>
+            <Link href="/playlists" className="hover:text-blue-200 transition-colors">Playlists</Link>
+          </nav>
+        </div>
+      </header>
 
-        {/* Platform Icons at the Top */}
+      <main className="flex-1 w-full max-w-5xl mx-auto px-4 py-4 md:py-6 pb-32">
+        {/* Title Section - Compact */}
+        <div className="mb-4 md:mb-6">
+          <h1 className="font-serif text-xl md:text-3xl font-bold text-primary mb-2 leading-tight">
+            {shiur.title}
+          </h1>
+          <div className="flex flex-wrap items-center gap-2 md:gap-4 text-xs md:text-sm text-muted-foreground">
+            <span>{formatDate(shiur.pubDate)}</span>
+            {shiur.duration && (
+              <>
+                <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
+                <span>{formatDuration(shiur.duration)}</span>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Thumbnail if exists */}
+        {shiur.thumbnail && (
+          <div className="mb-4 md:mb-6">
+            <img
+              src={shiur.thumbnail}
+              alt={shiur.title}
+              className="w-full max-w-2xl rounded-xl shadow-md"
+            />
+          </div>
+        )}
+
+        {/* Platform Icons - Full Width Centered */}
         {shiur.platformLinks && (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:p-8 mb-6">
-            <h2 className="font-serif text-2xl md:text-3xl font-semibold text-primary mb-6 text-center">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 md:p-6 mb-4 md:mb-6">
+            <h2 className="font-serif text-lg md:text-xl font-semibold text-primary mb-4 text-center">
               Listen Now
             </h2>
             <PlatformLinks links={shiur.platformLinks} title={shiur.title} />
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-8">
-          <div className="lg:col-span-2 space-y-4 md:space-y-6">
-            {/* Title and Blurb - At the Top */}
-            <article className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-              <div className="p-4 md:p-6 lg:p-10">
-                <h1 className="font-serif text-2xl md:text-3xl lg:text-5xl font-bold text-primary mb-3 md:mb-4 leading-tight">
-                  {shiur.title}
-                </h1>
-                <div className="flex flex-wrap items-center gap-3 md:gap-4 text-sm text-muted-foreground mb-6 md:mb-8">
-                  <span>{formatDate(shiur.pubDate)}</span>
-                  {shiur.duration && (
-                    <>
-                      <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
-                      <span>{formatDuration(shiur.duration)}</span>
-                    </>
-                  )}
-                </div>
-
-                {shiur.blurb && (
-                  <div className="prose prose-sm md:prose-base prose-blue max-w-none mb-4 text-gray-700">
-                    <p className="text-base md:text-lg leading-relaxed">{shiur.blurb}</p>
-                  </div>
-                )}
-
-                {formattedDescription.length > 0 && (
-                  <div className="prose prose-sm md:prose-base prose-blue max-w-none text-gray-700">
-                    {formattedDescription.map((line, index) => (
-                      <p key={index} className="mb-2">{line}</p>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </article>
-
-            {/* Audio Player */}
-            <ShiurAudioPlayer shiur={shiur} />
-
-            {/* Source Sheet - Embedded */}
-            {shiur.sourceDoc && (
-              <SourceSheetViewer sourceDoc={shiur.sourceDoc} title={shiur.title} />
-            )}
+        {/* Blurb - Compact */}
+        {shiur.blurb && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 md:p-6 mb-4 md:mb-6">
+            <p className="text-sm md:text-base text-gray-700 leading-relaxed">{shiur.blurb}</p>
           </div>
-        </div>
+        )}
+
+        {/* Source Sheet - Main Focus */}
+        {shiur.sourceDoc && (
+          <SourceSheetViewer sourceDoc={shiur.sourceDoc} title={shiur.title} />
+        )}
       </main>
+
+      {/* Bottom Navigation */}
+      <div className="bg-white border-t border-gray-200 py-4 fixed bottom-16 left-0 right-0 z-40">
+        <div className="max-w-5xl mx-auto px-4 flex items-center justify-center gap-4 md:gap-8">
+          <Link
+            href="/"
+            className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-full text-sm font-medium hover:bg-primary/90 transition-all hover:scale-105 shadow-md"
+          >
+            <i className="fas fa-home"></i>
+            <span className="hidden md:inline">Home</span>
+          </Link>
+          <a
+            href="https://chat.whatsapp.com/BdUZM8mzvXuEpgS9MoGN9W"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 px-4 py-2 bg-[#25D366] text-white rounded-full text-sm font-medium hover:bg-[#128C7E] transition-all hover:scale-105 shadow-md"
+          >
+            <i className="fab fa-whatsapp"></i>
+            <span className="hidden md:inline">WhatsApp</span>
+          </a>
+          <a
+            href="mailto:rabbikraz1@gmail.com"
+            className="flex items-center gap-2 px-4 py-2 bg-secondary text-white rounded-full text-sm font-medium hover:bg-secondary/90 transition-all hover:scale-105 shadow-md"
+          >
+            <i className="fas fa-gift"></i>
+            <span className="hidden md:inline">Sponsor</span>
+          </a>
+        </div>
+      </div>
+
+      {/* Sticky Audio Player - Fixed at Bottom */}
+      <StickyAudioPlayer shiur={shiur} />
     </div>
   )
 }

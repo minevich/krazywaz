@@ -12,10 +12,10 @@ const platforms = [
     icon: 'custom-ytmusic',
     customSvg: (
       <svg viewBox="0 0 176 176" width="3rem" height="3rem">
-        <circle fill="#4a90e2" cx="88" cy="88" r="88"/>
+        <circle fill="#4a90e2" cx="88" cy="88" r="88" />
         <path fill="#ffffff" d="M88,46c23.1,0,42,18.8,42,42s-18.8,42-42,42s-42-18.8-42-42S64.9,46,88,46 M88,42
           c-25.4,0-46,20.6-46,46s20.6,46,46,46s46-20.6,46-46S113.4,42,88,42L88,42z"/>
-        <polygon fill="#ffffff" points="72,111 111,87 72,65"/>
+        <polygon fill="#ffffff" points="72,111 111,87 72,65" />
       </svg>
     )
   },
@@ -40,8 +40,8 @@ const platforms = [
     icon: 'custom-pocket',
     customSvg: (
       <svg viewBox="0 0 32 32" width="3rem" height="3rem">
-        <circle cx="16" cy="15" r="15" fill="white"/>
-        <path fill="#4a90e2" fillRule="evenodd" clipRule="evenodd" d="M16 32c8.837 0 16-7.163 16-16S24.837 0 16 0 0 7.163 0 16s7.163 16 16 16Zm0-28.444C9.127 3.556 3.556 9.127 3.556 16c0 6.873 5.571 12.444 12.444 12.444v-3.11A9.333 9.333 0 1 1 25.333 16h3.111c0-6.874-5.571-12.445-12.444-12.445ZM8.533 16A7.467 7.467 0 0 0 16 23.467v-2.715A4.751 4.751 0 1 1 20.752 16h2.715a7.467 7.467 0 0 0-14.934 0Z"/>
+        <circle cx="16" cy="15" r="15" fill="white" />
+        <path fill="#4a90e2" fillRule="evenodd" clipRule="evenodd" d="M16 32c8.837 0 16-7.163 16-16S24.837 0 16 0 0 7.163 0 16s7.163 16 16 16Zm0-28.444C9.127 3.556 3.556 9.127 3.556 16c0 6.873 5.571 12.444 12.444 12.444v-3.11A9.333 9.333 0 1 1 25.333 16h3.111c0-6.874-5.571-12.445-12.444-12.445ZM8.533 16A7.467 7.467 0 0 0 16 23.467v-2.715A4.751 4.751 0 1 1 20.752 16h2.715a7.467 7.467 0 0 0-14.934 0Z" />
       </svg>
     )
   },
@@ -87,13 +87,13 @@ export default function PlatformGrid() {
           href={platform.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex flex-col items-center justify-center p-6 bg-white rounded-xl shadow-sm hover:shadow-md hover:-translate-y-1 transition-all border border-gray-100 group text-center h-full"
+          className="flex flex-col items-center justify-center p-6 bg-white rounded-xl shadow-sm hover:shadow-lg hover:-translate-y-2 hover:scale-105 active:scale-95 transition-all duration-200 border border-gray-100 group text-center h-full cursor-pointer"
         >
-          <div className="mb-4 h-12 w-12 relative flex items-center justify-center">
+          <div className="mb-4 h-12 w-12 relative flex items-center justify-center group-hover:scale-110 transition-transform duration-200">
             {platform.customSvg ? (
               platform.customSvg
             ) : (
-              <i className={`${platform.icon} text-4xl text-[#4a90e2]`}></i>
+              <i className={`${platform.icon} text-4xl text-[#4a90e2] group-hover:text-primary transition-colors`}></i>
             )}
           </div>
           <span className="font-medium text-gray-700 group-hover:text-primary transition-colors">
