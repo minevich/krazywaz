@@ -42,8 +42,9 @@ export async function getD1Database(): Promise<D1Database | null> {
         // Try OpenNext's getCloudflareContext
         const { getCloudflareContext } = await import('@opennextjs/cloudflare')
         const ctx = await getCloudflareContext()
-        if (ctx?.env?.DB) {
-            return ctx.env.DB as D1Database
+        const env = ctx?.env as any
+        if (env?.DB) {
+            return env.DB as D1Database
         }
     } catch (e) {
         // Fallback for other environments
