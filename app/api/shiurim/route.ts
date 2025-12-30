@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getDb } from '@/lib/db'
+import { getDb, getD1Database } from '@/lib/db'
 import { shiurim, platformLinks, users } from '@/lib/schema'
 import { cookies } from 'next/headers'
 import { eq } from 'drizzle-orm'
 import { desc } from 'drizzle-orm'
-
-
 
 async function isAuthenticated(d1: D1Database) {
   const cookieStore = await cookies()
@@ -24,8 +22,7 @@ async function isAuthenticated(d1: D1Database) {
 
 export async function GET(request: NextRequest) {
   try {
-    // @ts-ignore - Cloudflare Workers types
-    const d1: D1Database = request.env?.DB || (globalThis as any).DB
+    const d1 = await getD1Database()
 
     if (!d1) {
       return NextResponse.json(
@@ -71,8 +68,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    // @ts-ignore - Cloudflare Workers types
-    const d1: D1Database = request.env?.DB || (globalThis as any).DB
+    const d1 = await getD1Database()
 
     if (!d1) {
       return NextResponse.json(
@@ -143,4 +139,3 @@ export async function POST(request: NextRequest) {
     )
   }
 }
-

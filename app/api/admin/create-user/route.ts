@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createUser } from '@/lib/auth'
-
-
+import { getD1Database } from '@/lib/db'
 
 /**
  * One-time admin user creation endpoint
@@ -27,8 +26,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // @ts-ignore - Cloudflare Workers types
-    const d1: D1Database = request.env?.DB || (globalThis as any).DB
+    const d1 = await getD1Database()
 
     if (!d1) {
       return NextResponse.json(

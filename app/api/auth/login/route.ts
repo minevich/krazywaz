@@ -1,14 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyUser } from '@/lib/auth'
 import { cookies } from 'next/headers'
-
-
+import { getD1Database } from '@/lib/db'
 
 export async function POST(request: NextRequest) {
   try {
-    // Get D1 database from the request context (Cloudflare Workers)
-    // @ts-ignore - Cloudflare Workers types
-    const db: D1Database = request.env?.DB || (globalThis as any).DB
+    // Get D1 database using OpenNext's getCloudflareContext
+    const db = await getD1Database()
 
     if (!db) {
       console.error('D1 database not available')

@@ -33,6 +33,30 @@ export function getDb(d1Database: D1Database) {
     return db
 }
 
+/**
+ * Get D1 database from Cloudflare context
+ * Works with OpenNext on Cloudflare
+ */
+export async function getD1Database(): Promise<D1Database | null> {
+    try {
+        // Try OpenNext's getCloudflareContext
+        const { getCloudflareContext } = await import('@opennextjs/cloudflare')
+        const ctx = await getCloudflareContext()
+        if (ctx?.env?.DB) {
+            return ctx.env.DB as D1Database
+        }
+    } catch (e) {
+        // Fallback for other environments
+    }
+
+    // Fallback to globalThis
+    if ((globalThis as any).DB) {
+        return (globalThis as any).DB
+    }
+
+    return null
+}
+
 export type Database = ReturnType<typeof getDb>
 
 // Export schema for easy access
