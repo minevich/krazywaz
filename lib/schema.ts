@@ -18,6 +18,7 @@ export const users = sqliteTable('users', {
 export const shiurim = sqliteTable('shiurim', {
     id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
     guid: text('guid').notNull().unique(),
+    slug: text('slug').unique(), // Custom URL path, must be unique
     title: text('title').notNull(),
     description: text('description'),
     blurb: text('blurb'),

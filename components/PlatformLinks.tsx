@@ -14,62 +14,65 @@ interface PlatformLinksProps {
   title: string
 }
 
+// Uniform icon size for consistency
+const ICON_SIZE = "1.8rem"
+
 const platforms = [
-  { 
-    key: 'youtube', 
-    label: 'YouTube', 
+  {
+    key: 'youtube',
+    label: 'YouTube',
     icon: 'fab fa-youtube'
   },
-  { 
-    key: 'youtubeMusic', 
-    label: 'YT Music', 
+  {
+    key: 'youtubeMusic',
+    label: 'YT Music',
     icon: 'custom-ytmusic',
     customSvg: (
-      <svg viewBox="0 0 176 176" width="1.8rem" height="1.8rem">
-        <circle fill="#4a90e2" cx="88" cy="88" r="88"/>
+      <svg viewBox="0 0 176 176" style={{ width: ICON_SIZE, height: ICON_SIZE }}>
+        <circle fill="#4a90e2" cx="88" cy="88" r="88" />
         <path fill="#ffffff" d="M88,46c23.1,0,42,18.8,42,42s-18.8,42-42,42s-42-18.8-42-42S64.9,46,88,46 M88,42
           c-25.4,0-46,20.6-46,46s20.6,46,46,46s46-20.6,46-46S113.4,42,88,42L88,42z"/>
-        <polygon fill="#ffffff" points="72,111 111,87 72,65"/>
+        <polygon fill="#ffffff" points="72,111 111,87 72,65" />
       </svg>
     )
   },
-  { 
-    key: 'spotify', 
-    label: 'Spotify', 
+  {
+    key: 'spotify',
+    label: 'Spotify',
     icon: 'fab fa-spotify'
   },
-  { 
-    key: 'apple', 
-    label: 'Apple', 
+  {
+    key: 'apple',
+    label: 'Apple',
     icon: 'fab fa-apple'
   },
-  { 
-    key: 'amazon', 
-    label: 'Amazon', 
+  {
+    key: 'amazon',
+    label: 'Amazon',
     icon: 'fab fa-amazon'
   },
-  { 
-    key: 'pocket', 
-    label: 'Pocket', 
+  {
+    key: 'pocket',
+    label: 'Pocket',
     icon: 'custom-pocket',
     customSvg: (
-      <svg viewBox="0 0 32 32" width="1.8rem" height="1.8rem">
-        <circle cx="16" cy="15" r="15" fill="white"/>
-        <path fill="#4a90e2" fillRule="evenodd" clipRule="evenodd" d="M16 32c8.837 0 16-7.163 16-16S24.837 0 16 0 0 7.163 0 16s7.163 16 16 16Zm0-28.444C9.127 3.556 3.556 9.127 3.556 16c0 6.873 5.571 12.444 12.444 12.444v-3.11A9.333 9.333 0 1 1 25.333 16h3.111c0-6.874-5.571-12.445-12.444-12.445ZM8.533 16A7.467 7.467 0 0 0 16 23.467v-2.715A4.751 4.751 0 1 1 20.752 16h2.715a7.467 7.467 0 0 0-14.934 0Z"/>
+      <svg viewBox="0 0 32 32" style={{ width: ICON_SIZE, height: ICON_SIZE }}>
+        <circle cx="16" cy="15" r="15" fill="white" />
+        <path fill="#4a90e2" fillRule="evenodd" clipRule="evenodd" d="M16 32c8.837 0 16-7.163 16-16S24.837 0 16 0 0 7.163 0 16s7.163 16 16 16Zm0-28.444C9.127 3.556 3.556 9.127 3.556 16c0 6.873 5.571 12.444 12.444 12.444v-3.11A9.333 9.333 0 1 1 25.333 16h3.111c0-6.874-5.571-12.445-12.444-12.445ZM8.533 16A7.467 7.467 0 0 0 16 23.467v-2.715A4.751 4.751 0 1 1 20.752 16h2.715a7.467 7.467 0 0 0-14.934 0Z" />
       </svg>
     )
   },
-  { 
-    key: 'twentyFourSix', 
-    label: '24Six', 
+  {
+    key: 'twentyFourSix',
+    label: '24Six',
     icon: 'fas fa-mobile-alt'
   },
-  { 
-    key: 'castbox', 
-    label: 'Castbox', 
+  {
+    key: 'castbox',
+    label: 'Castbox',
     icon: 'custom-castbox',
     customSvg: (
-      <svg width="1.8rem" height="1.8rem" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+      <svg style={{ width: ICON_SIZE, height: ICON_SIZE }} viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
         <path fill="#4a90e2" d="M396,512H116C51.93,512,0,460.07,0,396V116C0,51.93,51.93,0,116,0h280c64.07,0,116,51.93,116,116v280
           C512,460.07,460.07,512,396,512z"/>
         <g>
@@ -102,7 +105,7 @@ export default function PlatformLinks({ links, title }: PlatformLinksProps) {
   }
 
   return (
-    <div className="flex flex-wrap gap-4 md:gap-6 justify-center items-center">
+    <div className="listen-icons flex flex-wrap gap-4 md:gap-6 justify-center items-center max-w-[1000px] mx-auto">
       {availablePlatforms.map((platform) => {
         const url = links[platform.key as keyof typeof links]
         if (!url) return null
@@ -113,18 +116,28 @@ export default function PlatformLinks({ links, title }: PlatformLinksProps) {
             href={url}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex flex-col items-center text-decoration-none text-gray-700 hover:text-primary transition-all hover:-translate-y-1"
+            className="flex flex-col items-center no-underline text-gray-700 text-sm transition-transform hover:-translate-y-1"
           >
             {platform.customSvg ? (
-              <div className="mb-2">{platform.customSvg}</div>
+              <div className="mb-1" style={{ width: ICON_SIZE, height: ICON_SIZE }}>{platform.customSvg}</div>
             ) : (
-              <i className={`${platform.icon} text-3xl md:text-4xl text-[#4a90e2] mb-2`}></i>
+              <i className={`${platform.icon} text-[#4a90e2] mb-1`} style={{ fontSize: ICON_SIZE }}></i>
             )}
-            <span className="text-sm md:text-base">{platform.label}</span>
+            <span className="text-sm">{platform.label}</span>
           </a>
         )
       })}
+
+      {/* RSS Feed link - always show */}
+      <a
+        href="https://anchor.fm/s/d89491c4/podcast/rss"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex flex-col items-center no-underline text-gray-700 text-sm transition-transform hover:-translate-y-1"
+      >
+        <i className="fas fa-rss text-[#4a90e2] mb-1" style={{ fontSize: ICON_SIZE }}></i>
+        <span className="text-sm">RSS</span>
+      </a>
     </div>
   )
 }
-
