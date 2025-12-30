@@ -159,7 +159,7 @@ export default async function ShiurPage({ params }: { params: Promise<{ id: stri
           const thumbnailUrl = shiur.thumbnail || getYouTubeThumbnail(youtubeVideoId)
           if (!thumbnailUrl) return null
           return (
-            <div className="mt-4 md:mt-6 mb-20">
+            <div className="mt-4 md:mt-6 mb-8 md:mb-20">
               <img
                 src={thumbnailUrl}
                 alt={shiur.title}
