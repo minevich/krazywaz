@@ -11,7 +11,7 @@ const platforms = [
     url: 'https://music.youtube.com/playlist?list=PLFjvIKKaTDH85ZHMy4LsIxVydbTSL8kbt',
     icon: 'custom-ytmusic',
     customSvg: (
-      <svg viewBox="0 0 176 176" width="3rem" height="3rem">
+      <svg viewBox="0 0 176 176" className="w-8 h-8 md:w-12 md:h-12">
         <circle fill="#4a90e2" cx="88" cy="88" r="88" />
         <path fill="#ffffff" d="M88,46c23.1,0,42,18.8,42,42s-18.8,42-42,42s-42-18.8-42-42S64.9,46,88,46 M88,42
           c-25.4,0-46,20.6-46,46s20.6,46,46,46s46-20.6,46-46S113.4,42,88,42L88,42z"/>
@@ -39,7 +39,7 @@ const platforms = [
     url: 'https://pca.st/74lg0vrl',
     icon: 'custom-pocket',
     customSvg: (
-      <svg viewBox="0 0 32 32" width="3rem" height="3rem">
+      <svg viewBox="0 0 32 32" className="w-8 h-8 md:w-12 md:h-12">
         <circle cx="16" cy="15" r="15" fill="white" />
         <path fill="#4a90e2" fillRule="evenodd" clipRule="evenodd" d="M16 32c8.837 0 16-7.163 16-16S24.837 0 16 0 0 7.163 0 16s7.163 16 16 16Zm0-28.444C9.127 3.556 3.556 9.127 3.556 16c0 6.873 5.571 12.444 12.444 12.444v-3.11A9.333 9.333 0 1 1 25.333 16h3.111c0-6.874-5.571-12.445-12.444-12.445ZM8.533 16A7.467 7.467 0 0 0 16 23.467v-2.715A4.751 4.751 0 1 1 20.752 16h2.715a7.467 7.467 0 0 0-14.934 0Z" />
       </svg>
@@ -55,7 +55,7 @@ const platforms = [
     url: 'https://castbox.fm/channel/Rabbi-Krazs-Shiurim-id5574479',
     icon: 'custom-castbox',
     customSvg: (
-      <svg width="3rem" height="3rem" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+      <svg className="w-8 h-8 md:w-12 md:h-12" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
         <path fill="#4a90e2" d="M396,512H116C51.93,512,0,460.07,0,396V116C0,51.93,51.93,0,116,0h280c64.07,0,116,51.93,116,116v280
           C512,460.07,460.07,512,396,512z"/>
         <g>
@@ -80,23 +80,23 @@ const platforms = [
 
 export default function PlatformGrid() {
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 max-w-5xl mx-auto my-12 px-4">
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-4 max-w-5xl mx-auto my-6 md:my-12 px-2 md:px-4">
       {platforms.map((platform) => (
         <Link
           key={platform.name}
           href={platform.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex flex-col items-center justify-center p-6 bg-white rounded-xl shadow-sm hover:shadow-lg hover:-translate-y-2 hover:scale-105 active:scale-95 transition-all duration-200 border border-gray-100 group text-center h-full cursor-pointer"
+          className="flex flex-col items-center justify-center p-3 md:p-6 bg-white rounded-xl shadow-sm hover:shadow-lg hover:-translate-y-2 hover:scale-105 active:scale-95 transition-all duration-200 border border-gray-100 group text-center h-full cursor-pointer"
         >
-          <div className="mb-4 h-12 w-12 relative flex items-center justify-center group-hover:scale-110 transition-transform duration-200">
+          <div className="mb-2 md:mb-4 h-8 w-8 md:h-12 md:w-12 relative flex items-center justify-center group-hover:scale-110 transition-transform duration-200">
             {platform.customSvg ? (
               platform.customSvg
             ) : (
-              <i className={`${platform.icon} text-4xl text-[#4a90e2] group-hover:text-primary transition-colors`}></i>
+              <i className={`${platform.icon} text-2xl md:text-4xl text-[#4a90e2] group-hover:text-primary transition-colors`}></i>
             )}
           </div>
-          <span className="font-medium text-gray-700 group-hover:text-primary transition-colors">
+          <span className="font-medium text-sm md:text-base text-gray-700 group-hover:text-primary transition-colors">
             {platform.name}
           </span>
         </Link>

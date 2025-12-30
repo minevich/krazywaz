@@ -15,7 +15,7 @@ interface PlatformLinksProps {
 }
 
 // Uniform icon size for consistency
-const ICON_SIZE = "1.8rem"
+const ICON_SIZE = "1.5rem" // Reduced for mobile, will scale via classes if needed
 
 const platforms = [
   {
@@ -119,11 +119,11 @@ export default function PlatformLinks({ links, title }: PlatformLinksProps) {
             className="flex flex-col items-center no-underline text-gray-700 text-sm transition-transform hover:-translate-y-1"
           >
             {platform.customSvg ? (
-              <div className="mb-1" style={{ width: ICON_SIZE, height: ICON_SIZE }}>{platform.customSvg}</div>
+              <div className="mb-1 w-6 h-6 md:w-7 md:h-7">{platform.customSvg}</div>
             ) : (
-              <i className={`${platform.icon} text-[#4a90e2] mb-1`} style={{ fontSize: ICON_SIZE }}></i>
+              <i className={`${platform.icon} text-[#4a90e2] mb-1 text-2xl md:text-3xl`}></i>
             )}
-            <span className="text-sm">{platform.label}</span>
+            <span className="text-xs md:text-sm">{platform.label}</span>
           </a>
         )
       })}
