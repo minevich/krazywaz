@@ -141,14 +141,14 @@ export default function SourceManager() {
                 })
             })
 
-            const data = await response.json()
+            const data = await response.json() as any
             if (data.hits && data.hits.hits.length > 0) {
                 const hit = data.hits.hits[0]._source
                 const ref = hit.ref
 
                 // Get Text content
                 const textRes = await fetch(`https://www.sefaria.org/api/texts/${ref}`)
-                const textData = await textRes.json()
+                const textData = await textRes.json() as any
 
                 setSources(prev => prev.map(s =>
                     s.id === sourceId ? {
