@@ -438,6 +438,29 @@ export default function SourceManager() {
                                                 >
                                                     English
                                                 </button>
+                                                <button
+                                                    onClick={async () => {
+                                                        const firstLine = source.text.split('\n')[0].replace(/[0-9.]/g, '').trim().substring(0, 100)
+                                                        if (!firstLine) return alert('No text to identify')
+
+                                                        try {
+                                                            const res = await fetch(`https://www.sefaria.org/api/name/${encodeURIComponent(firstLine)}`)
+                                                            const data = await res.json() as any
+                                                            if (data.is_ref || data.is_book) {
+                                                                const newTitle = data.primary_category ? `${data.primary_category} - ${firstLine}` : (data.ref || firstLine)
+                                                                updateSource(source.id, { title: newTitle })
+                                                                alert(`Identified as: ${newTitle}`)
+                                                            } else {
+                                                                alert(`Could not identify: "${firstLine}". Try editing the text start to be a standard citation.`)
+                                                            }
+                                                        } catch (e) {
+                                                            alert('Error checking Sefaria')
+                                                        }
+                                                    }}
+                                                    className="px-3 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors ml-2"
+                                                >
+                                                    Identify (Sefaria)
+                                                </button>
                                             </div>
 
                                             <button
