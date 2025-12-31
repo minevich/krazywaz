@@ -242,8 +242,8 @@ export default function SourceManager() {
                                 className="w-4 h-4 text-primary rounded border-gray-300 focus:ring-primary"
                             />
                             <div>
-                                <span className="font-medium text-gray-700">Use OCR (Google Vision)</span>
-                                <p className="text-xs text-gray-500">Enable for scanned PDFs or images. Uses Hebrew text recognition.</p>
+                                <span className="font-medium text-gray-700">Use OCR (for scanned PDFs)</span>
+                                <p className="text-xs text-gray-500">Enable for scanned/image-based PDFs that don't have selectable text.</p>
                             </div>
                         </label>
 
