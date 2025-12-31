@@ -66,17 +66,17 @@ async function ocrWithOcrSpace(buffer: Buffer, filename: string, mimeType: strin
     const base64Data = buffer.toString('base64')
     const base64File = `data:${mimeType};base64,${base64Data}`
 
-    // Determine language - use Hebrew + English
+    // Use Engine 1 which supports Hebrew
     const formData = new FormData()
     formData.append('base64Image', base64File)
-    formData.append('language', 'heb') // Hebrew
+    formData.append('language', 'heb') // Hebrew - only works with Engine 1
     formData.append('isOverlayRequired', 'false')
     formData.append('filetype', mimeType === 'application/pdf' ? 'PDF' : 'AUTO')
     formData.append('detectOrientation', 'true')
     formData.append('scale', 'true')
-    formData.append('OCREngine', '2') // Engine 2 is better for Hebrew
+    formData.append('OCREngine', '1') // Engine 1 supports Hebrew
 
-    console.log('Calling OCR.space API...')
+    console.log('Calling OCR.space API with Hebrew...')
 
     const response = await fetch('https://api.ocr.space/parse/image', {
         method: 'POST',
