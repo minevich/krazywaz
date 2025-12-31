@@ -54,23 +54,35 @@ function getCategoryInfo(title: string): { name: string, orderIndex: number } | 
 
 async function getPlaylists() {
   try {
-    const playlistsResponse = await fetch(
-      `https://www.googleapis.com/youtube/v3/playlists?part=snippet,contentDetails&channelId=${YOUTUBE_CHANNEL_ID}&maxResults=50&key=${YOUTUBE_API_KEY}`,
-      { next: { revalidate: 3600 } }
-    )
+    let allPlaylists: any[] = []
+    let nextPageToken: string | undefined = undefined
 
-    if (!playlistsResponse.ok) {
-      console.error('Failed to fetch playlists from YouTube API')
+    do {
+      let url = `https://www.googleapis.com/youtube/v3/playlists?part=snippet,contentDetails&channelId=${YOUTUBE_CHANNEL_ID}&maxResults=50&key=${YOUTUBE_API_KEY}`
+      if (nextPageToken) {
+        url += `&pageToken=${nextPageToken}`
+      }
+
+      const response = await fetch(url, { next: { revalidate: 3600 } })
+
+      if (!response.ok) {
+        console.error('Failed to fetch playlists from YouTube API')
+        break
+      }
+
+      const data = await response.json() as any
+      if (data.items) {
+        allPlaylists = [...allPlaylists, ...data.items]
+      }
+
+      nextPageToken = data.nextPageToken
+    } while (nextPageToken)
+
+    if (allPlaylists.length === 0) {
       return []
     }
 
-    const playlistsData = await playlistsResponse.json() as any
-
-    if (!playlistsData.items || playlistsData.items.length === 0) {
-      return []
-    }
-
-    return playlistsData.items.map((item: any) => {
+    return allPlaylists.map((item: any) => {
       const catInfo = getCategoryInfo(item.snippet.title)
       return {
         id: item.id,
@@ -143,7 +155,7 @@ export default async function PlaylistsPage() {
             </a>
           </div>
         ) : (
-          <div className="space-y-8">
+          <div className="space-y-4">
             {/* Grouped by Category - Collapsible */}
             {sortedCategories.map((category) => {
               const categoryPlaylists = groupedPlaylists[category.name]
