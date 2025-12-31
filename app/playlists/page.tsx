@@ -82,20 +82,22 @@ async function getPlaylists() {
       return []
     }
 
-    return allPlaylists.map((item: any) => {
-      const catInfo = getCategoryInfo(item.snippet.title)
-      return {
-        id: item.id,
-        title: item.snippet.title,
-        description: item.snippet.description,
-        thumbnail: item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.medium?.url || item.snippet.thumbnails?.default?.url,
-        videoCount: item.contentDetails?.itemCount || 0,
-        publishedAt: item.snippet.publishedAt,
-        playlistUrl: `https://www.youtube.com/playlist?list=${item.id}`,
-        category: catInfo?.name || null,
-        orderIndex: catInfo?.orderIndex ?? 999
-      }
-    })
+    return allPlaylists
+      .filter((item: any) => item.snippet.title.toLowerCase() !== 'rabbi kraz shiurim')
+      .map((item: any) => {
+        const catInfo = getCategoryInfo(item.snippet.title)
+        return {
+          id: item.id,
+          title: item.snippet.title,
+          description: item.snippet.description,
+          thumbnail: item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.medium?.url || item.snippet.thumbnails?.default?.url,
+          videoCount: item.contentDetails?.itemCount || 0,
+          publishedAt: item.snippet.publishedAt,
+          playlistUrl: `https://www.youtube.com/playlist?list=${item.id}`,
+          category: catInfo?.name || null,
+          orderIndex: catInfo?.orderIndex ?? 999
+        }
+      })
   } catch (error) {
     console.error('Error fetching playlists:', error)
     return []
