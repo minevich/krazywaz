@@ -9,7 +9,7 @@ const PLAYLIST_CATEGORIES = [
   {
     name: 'Bereishis',
     english: 'Genesis',
-    keywords: ['bereishis', 'bereshit', 'genesis', 'בראשית', 'noach', 'lech lecha', 'vayeira', 'chayei sarah', 'toldos', 'vayetzei', 'vayishlach', 'vayeshev', 'mikeitz', 'vayigash', 'vayechi']
+    keywords: ['bereishis', 'bereshit', 'genesis', 'בראשית', 'noach', 'lech lecha', 'vayeira', 'chayei sarah', 'toldos', 'vayetzei', 'vayeitzei', 'vayishlach', 'vayeshev', 'mikeitz', 'vayigash', 'vayechi']
   },
   {
     name: 'Shemos',
