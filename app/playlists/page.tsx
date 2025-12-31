@@ -4,19 +4,44 @@ import { YOUTUBE_API_KEY, YOUTUBE_CHANNEL_ID } from '@/lib/youtube'
 
 export const revalidate = 3600 // Revalidate every hour
 
-const TORAH_BOOKS = [
-  { name: 'Bereishit', english: 'Genesis', keywords: ['bereishit', 'bereshit', 'genesis', 'בראשית'] },
-  { name: 'Shemot', english: 'Exodus', keywords: ['shemot', 'exodus', 'שמות'] },
-  { name: 'Vayikra', english: 'Leviticus', keywords: ['vayikra', 'leviticus', 'ויקרא'] },
-  { name: 'Bamidbar', english: 'Numbers', keywords: ['bamidbar', 'numbers', 'במדבר'] },
-  { name: 'Devarim', english: 'Deuteronomy', keywords: ['devarim', 'deuteronomy', 'דברים'] },
+const PLAYLIST_CATEGORIES = [
+  {
+    name: 'Bereishis',
+    english: 'Genesis',
+    keywords: ['bereishis', 'bereshit', 'genesis', 'בראשית', 'noach', 'lech lecha', 'vayeira', 'chayei sarah', 'toldos', 'vayetzei', 'vayishlach', 'vayeshev', 'mikeitz', 'vayigash', 'vayechi']
+  },
+  {
+    name: 'Shemos',
+    english: 'Exodus',
+    keywords: ['shemos', 'shemot', 'exodus', 'שמות', 'va\'eira', 'vaeira', 'bo', 'beshalach', 'yisro', 'mishpatim', 'teruma', 'tetzave', 'ki sisa', 'vayakhel', 'pekudei']
+  },
+  {
+    name: 'Vayikra',
+    english: 'Leviticus',
+    keywords: ['vayikra', 'leviticus', 'ויקרא', 'tzav', 'shemini', 'tazria', 'metzorah', 'acharei mos', 'kedoshim', 'emor', 'behar', 'bechukosai']
+  },
+  {
+    name: 'Bamidbar',
+    english: 'Numbers',
+    keywords: ['bamidbar', 'numbers', 'במדבר', 'naso', 'behaalosecha', 'shelach', 'korach', 'chukas', 'balak', 'pinchas', 'matos', 'massei']
+  },
+  {
+    name: 'Devarim',
+    english: 'Deuteronomy',
+    keywords: ['devarim', 'deuteronomy', 'דברים', 'va\'eschanan', 'vaeschanan', 'eikev', 're\'eh', 'shoftim', 'ki seitzei', 'ki savo', 'nitzavim', 'vayelech', 'ha\'azinu', 'v\'zos habracha', 'vzos habracha']
+  },
+  {
+    name: 'Jewish Calendar',
+    english: 'Holidays',
+    keywords: ['calendar', 'holiday', 'moed', 'yom tov', 'rosh hashana', 'yom kippur', 'sukkos', 'sukkot', 'chanukah', 'hanukkah', 'purim', 'pesach', 'passover', 'sefira', 'lag ba\'omer', 'shavuos', 'shavuot', 'tisha b\'av', 'three weeks', 'elul', 'tishrei', 'nissan', 'adar']
+  }
 ]
 
-function getBookOfTorah(title: string): string | null {
+function getCategory(title: string): string | null {
   const lowerTitle = title.toLowerCase()
-  for (const book of TORAH_BOOKS) {
-    if (book.keywords.some(keyword => lowerTitle.includes(keyword))) {
-      return book.name
+  for (const category of PLAYLIST_CATEGORIES) {
+    if (category.keywords.some(keyword => lowerTitle.includes(keyword))) {
+      return category.name
     }
   }
   return null
@@ -48,7 +73,7 @@ async function getPlaylists() {
       videoCount: item.contentDetails?.itemCount || 0,
       publishedAt: item.snippet.publishedAt,
       playlistUrl: `https://www.youtube.com/playlist?list=${item.id}`,
-      book: getBookOfTorah(item.snippet.title),
+      category: getCategory(item.snippet.title),
     }))
   } catch (error) {
     console.error('Error fetching playlists:', error)
@@ -59,23 +84,23 @@ async function getPlaylists() {
 export default async function PlaylistsPage() {
   const playlists = await getPlaylists()
 
-  // Group playlists by book of Torah
+  // Group playlists by category
   const groupedPlaylists: Record<string, typeof playlists> = {}
   const ungroupedPlaylists: typeof playlists = []
 
   playlists.forEach((playlist: any) => {
-    if (playlist.book) {
-      if (!groupedPlaylists[playlist.book]) {
-        groupedPlaylists[playlist.book] = []
+    if (playlist.category) {
+      if (!groupedPlaylists[playlist.category]) {
+        groupedPlaylists[playlist.category] = []
       }
-      groupedPlaylists[playlist.book].push(playlist)
+      groupedPlaylists[playlist.category].push(playlist)
     } else {
       ungroupedPlaylists.push(playlist)
     }
   })
 
-  // Sort books in order
-  const sortedBooks = TORAH_BOOKS.filter(book => groupedPlaylists[book.name])
+  // Sort categories in order
+  const sortedCategories = PLAYLIST_CATEGORIES.filter(cat => groupedPlaylists[cat.name])
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50/50">
@@ -105,16 +130,16 @@ export default async function PlaylistsPage() {
           </div>
         ) : (
           <div className="space-y-12">
-            {/* Grouped by Book of Torah */}
-            {sortedBooks.map((book) => {
-              const bookPlaylists = groupedPlaylists[book.name]
+            {/* Grouped by Category */}
+            {sortedCategories.map((category) => {
+              const categoryPlaylists = groupedPlaylists[category.name]
               return (
-                <div key={book.name} className="space-y-6">
+                <div key={category.name} className="space-y-6">
                   <h2 className="font-serif text-2xl md:text-3xl font-bold text-primary border-b-2 border-primary pb-2">
-                    {book.name} ({book.english})
+                    {category.name} {category.english !== 'Holidays' && `(${category.english})`}
                   </h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {bookPlaylists.map((playlist: any) => (
+                    {categoryPlaylists.map((playlist: any) => (
                       <a
                         key={playlist.id}
                         href={`https://www.youtube.com/playlist?list=${playlist.id}`}
@@ -170,7 +195,7 @@ export default async function PlaylistsPage() {
             {ungroupedPlaylists.length > 0 && (
               <div className="space-y-6">
                 <h2 className="font-serif text-2xl md:text-3xl font-bold text-primary border-b-2 border-primary pb-2">
-                  Other Playlists
+                  Miscellaneous
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {ungroupedPlaylists.map((playlist: any) => (
