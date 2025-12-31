@@ -53,44 +53,60 @@ export async function POST(request: NextRequest) {
 }
 
 async function identifySefariaSource(source: { id: string; text: string; type: string; title?: string }) {
-    if (!source.title) return source
+    // Candidates for lookup: Title, or First Line of text
+    const candidates: string[] = []
 
-    try {
-        // clean title for Sefaria (remove "Source 1:", digits, etc if they are just numbering)
-        // Keep the main ref text e.g., "Berakhot 2a"
-        let cleanTitle = source.title
+    if (source.title) candidates.push(source.title)
+
+    // Always add first line of text as a candidate, trimmed
+    const lines = source.text.split('\n')
+    const firstLine = lines[0].trim()
+    if (firstLine && firstLine !== source.title) {
+        candidates.push(firstLine)
+    }
+
+    for (const rawCandidate of candidates) {
+        if (rawCandidate.length < 2) continue
+
+        // clean title for Sefaria
+        // Remove "Source 1:", "Mekor 1", "1.", "(1)", etc
+        let cleanCandidate = rawCandidate
             .replace(/^(Source|Mekor|מקור|SOURCE)\s+[\dא-ת]+[:\.\)\-\s]*/i, '') // Remove "Source 1:"
             .replace(/^[\dא-ת]+[\.\)\-\s]+/, '') // Remove "1." or "א."
             .replace(/[\\(\)]/g, '') // Remove parens
             .trim()
 
-        if (cleanTitle.length < 2) return source
+        // If cleaning killed it (e.g. it was just "1."), skip
+        if (cleanCandidate.length < 2) continue
 
-        // Check Sefaria for this title/ref (using Name API)
-        const response = await fetch(`https://www.sefaria.org/api/name/${encodeURIComponent(cleanTitle)}`)
+        try {
+            // Check Sefaria
+            const response = await fetch(`https://www.sefaria.org/api/name/${encodeURIComponent(cleanCandidate)}`)
+            if (!response.ok) continue
 
-        if (!response.ok) return source
+            const data = await response.json() as any
 
-        const data = await response.json() as any
-
-        // If it's a known ref or index or book
-        if (data.is_ref || data.is_index || data.is_book) {
-            console.log(`Identified: ${cleanTitle} -> ${data.ref || data.primary_category}`)
-            return {
-                ...source,
-                title: data.hebrew || data.primary_category ? `${data.primary_category || data.ref} - ${cleanTitle}` : cleanTitle,
-                sefariaRef: data.ref || cleanTitle,
-                hebrewTitle: data.hebrew,
-                category: data.primary_category,
-                link: data.ref ? `https://www.sefaria.org/${data.ref}` : undefined
+            // If it's a known ref or index or book
+            if (data.is_ref || data.is_index || data.is_book) {
+                console.log(`Identified: ${cleanCandidate} -> ${data.ref || data.primary_category}`)
+                return {
+                    ...source,
+                    title: data.hebrew || data.primary_category ? `${data.primary_category || data.ref} - ${cleanCandidate}` : cleanCandidate,
+                    sefariaRef: data.ref || cleanCandidate,
+                    hebrewTitle: data.hebrew,
+                    category: data.primary_category,
+                    link: data.ref ? `https://www.sefaria.org/${data.ref}` : undefined
+                }
             }
+        } catch (e) {
+            console.error('Sefaria lookup failed:', e)
         }
-    } catch (e) {
-        // Ignore API errors, just return original source
-        console.error('Sefaria lookup failed:', e)
     }
+
     return source
 }
+
+
 
 async function ocrWithGoogleVision(buffer: Buffer, mimeType: string): Promise<string> {
     const base64Content = buffer.toString('base64')
