@@ -69,49 +69,103 @@ export default function SourceManager() {
         setIsProcessing(true)
 
         try {
-            const formData = new FormData()
-            formData.append('file', file)
-            formData.append('useOCR', forceOCR ? 'true' : 'false')
+            let allText = ''
+            let allSources: ParsedSource[] = []
 
-            const res = await fetch('/api/sources/parse', {
-                method: 'POST',
-                body: formData
-            })
+            if (file.type === 'application/pdf') {
+                // Convert PDF pages to images and OCR each
+                const pdfImages = await convertPdfToImages(file)
+                console.log(`Converted PDF to ${pdfImages.length} images`)
 
-            const data = await res.json() as {
-                success: boolean
-                rawText: string
-                sources: ParsedSource[]
-                error?: string
-                isPdfScan?: boolean
-                requiresOCR?: boolean
-            }
+                for (let i = 0; i < pdfImages.length; i++) {
+                    console.log(`Processing page ${i + 1}/${pdfImages.length}`)
+                    const formData = new FormData()
+                    formData.append('file', pdfImages[i], `page-${i + 1}.png`)
+                    formData.append('useOCR', 'true')
 
-            if (data.success) {
-                setRawText(data.rawText)
-                setSources(data.sources)
-                if (data.sources.length === 0) {
-                    alert('No text was found in the file. Try a different file or add sources manually.')
+                    const res = await fetch('/api/sources/parse', {
+                        method: 'POST',
+                        body: formData
+                    })
+
+                    const data = await res.json() as { success: boolean; rawText: string; sources: ParsedSource[] }
+                    if (data.success) {
+                        allText += data.rawText + '\n\n'
+                        allSources = [...allSources, ...data.sources]
+                    }
+                }
+
+                setRawText(allText)
+                setSources(allSources)
+
+                if (allSources.length === 0) {
+                    alert('No text was found in the PDF. Try a clearer scan or add sources manually.')
                 }
             } else {
-                const errorMsg = data.error || 'Unknown error'
-                if (errorMsg.includes('size') || errorMsg.includes('1024')) {
-                    alert('⚠️ File Too Large\n\nThe free OCR service has a 1MB limit.\n\nOptions:\n1. Compress your PDF (use ilovepdf.com)\n2. Screenshot individual pages and upload those\n3. Use the "paste text" option below - copy text from your PDF viewer')
-                } else if (data.isPdfScan) {
-                    alert('⚠️ Scanned PDF\n\nThis PDF is image-based. Enable the OCR option above and try again.\n\nNote: File must be under 1MB.')
-                } else if (data.requiresOCR) {
-                    setForceOCR(true)
-                    alert('This is an image file. OCR has been enabled - try again.')
+                // Direct image upload
+                const formData = new FormData()
+                formData.append('file', file)
+                formData.append('useOCR', 'true')
+
+                const res = await fetch('/api/sources/parse', {
+                    method: 'POST',
+                    body: formData
+                })
+
+                const data = await res.json() as {
+                    success: boolean
+                    rawText: string
+                    sources: ParsedSource[]
+                    error?: string
+                }
+
+                if (data.success) {
+                    setRawText(data.rawText)
+                    setSources(data.sources)
+                    if (data.sources.length === 0) {
+                        alert('No text was found. Try a clearer image or add sources manually.')
+                    }
                 } else {
-                    alert('Error: ' + errorMsg)
+                    alert('Error: ' + (data.error || 'Unknown error'))
                 }
             }
         } catch (e) {
             console.error('Processing error:', e)
-            alert('Failed to process file. Please try again.')
+            alert('Failed to process file: ' + (e as Error).message)
         } finally {
             setIsProcessing(false)
         }
+    }
+
+    // Convert PDF to images using pdf.js
+    const convertPdfToImages = async (pdfFile: File): Promise<Blob[]> => {
+        const pdfjsLib = await import('pdfjs-dist')
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
+
+        const arrayBuffer = await pdfFile.arrayBuffer()
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
+
+        const images: Blob[] = []
+        const scale = 2.0 // Higher quality
+
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+            const page = await pdf.getPage(pageNum)
+            const viewport = page.getViewport({ scale })
+
+            const canvas = document.createElement('canvas')
+            canvas.width = viewport.width
+            canvas.height = viewport.height
+
+            const context = canvas.getContext('2d')!
+            await page.render({ canvasContext: context, viewport, canvas } as any).promise
+
+            const blob = await new Promise<Blob>((resolve) => {
+                canvas.toBlob((b) => resolve(b!), 'image/png', 0.95)
+            })
+            images.push(blob)
+        }
+
+        return images
     }
 
     const addManualSource = () => {

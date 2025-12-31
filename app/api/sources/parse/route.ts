@@ -1,56 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-const OCR_SPACE_API_KEY = process.env.OCR_SPACE_API_KEY || 'K83119185988957'
 const GOOGLE_VISION_API_KEY = process.env.GOOGLE_VISION_API_KEY || 'AIzaSyAXKKKN7H5WmZjQXipg7ghBQHkIxhVyWN0'
 
 export async function POST(request: NextRequest) {
     try {
         const formData = await request.formData()
         const file = formData.get('file') as File
-        const useOCR = formData.get('useOCR') === 'true'
 
         if (!file) {
             return NextResponse.json({ error: 'No file provided' }, { status: 400 })
         }
 
-        console.log('Processing file:', file.name, 'Type:', file.type, 'Size:', file.size, 'UseOCR:', useOCR)
+        console.log('Processing file:', file.name, 'Type:', file.type, 'Size:', file.size)
 
         const bytes = await file.arrayBuffer()
         const buffer = Buffer.from(bytes)
 
-        let text = ''
-        let method = ''
+        // Use Google Vision for both PDFs and images - it supports both!
+        console.log('Using Google Vision API...')
+        const text = await ocrWithGoogleVision(buffer, file.type)
 
-        const isImage = file.type.startsWith('image/')
-        const isPdf = file.type === 'application/pdf'
-
-        if (isImage) {
-            // Use Google Vision for images (supports Hebrew, up to 10MB)
-            console.log('Using Google Vision for image...')
-            text = await ocrWithGoogleVision(buffer)
-            method = 'google_vision'
-        } else if (isPdf && useOCR) {
-            // Use OCR.space for PDFs (1MB limit, auto-detect language)
-            console.log('Using OCR.space for PDF...')
-            text = await ocrWithOcrSpace(buffer, file.name, file.type)
-            method = 'ocr_space'
-        } else if (isPdf) {
-            // Try embedded text extraction first
-            console.log('Trying embedded text extraction...')
-            text = await extractTextFromPdf(buffer)
-            method = 'pdf_text'
-
-            if (!text.trim()) {
-                // No embedded text, use OCR.space
-                console.log('No embedded text, falling back to OCR.space...')
-                text = await ocrWithOcrSpace(buffer, file.name, file.type)
-                method = 'ocr_space'
-            }
-        } else {
-            return NextResponse.json({ error: 'Unsupported file type' }, { status: 400 })
-        }
-
-        console.log('Extracted text length:', text.length, 'Method:', method)
+        console.log('Extracted text length:', text.length)
 
         const sources = parseSourcesFromText(text)
 
@@ -58,7 +28,7 @@ export async function POST(request: NextRequest) {
             success: true,
             rawText: text,
             sources,
-            method
+            method: 'google_vision'
         })
     } catch (error) {
         console.error('Processing error:', error)
@@ -68,15 +38,21 @@ export async function POST(request: NextRequest) {
     }
 }
 
-// Google Cloud Vision - for images, supports Hebrew, up to 10MB
-async function ocrWithGoogleVision(buffer: Buffer): Promise<string> {
-    const base64Image = buffer.toString('base64')
+async function ocrWithGoogleVision(buffer: Buffer, mimeType: string): Promise<string> {
+    const base64Content = buffer.toString('base64')
 
+    // Google Vision API supports PDFs directly (up to 5 pages with images:annotate)
     const requestBody = {
         requests: [
             {
-                image: { content: base64Image },
-                features: [{ type: 'DOCUMENT_TEXT_DETECTION' }],
+                image: {
+                    content: base64Content
+                },
+                features: [
+                    {
+                        type: 'DOCUMENT_TEXT_DETECTION'
+                    }
+                ],
                 imageContext: {
                     languageHints: ['he', 'en', 'yi'] // Hebrew, English, Yiddish
                 }
@@ -97,7 +73,10 @@ async function ocrWithGoogleVision(buffer: Buffer): Promise<string> {
 
     const data = await response.json() as any
 
+    console.log('Google Vision response status:', response.status)
+
     if (!response.ok) {
+        console.error('Google Vision API error:', JSON.stringify(data).substring(0, 500))
         throw new Error(`Google Vision error: ${data.error?.message || response.statusText}`)
     }
 
@@ -105,69 +84,13 @@ async function ocrWithGoogleVision(buffer: Buffer): Promise<string> {
         throw new Error(`Vision API error: ${data.responses[0].error.message}`)
     }
 
-    return data.responses?.[0]?.fullTextAnnotation?.text || ''
-}
+    const fullText = data.responses?.[0]?.fullTextAnnotation?.text || ''
 
-// OCR.space - for PDFs, 1MB limit, auto-detect language
-async function ocrWithOcrSpace(buffer: Buffer, filename: string, mimeType: string): Promise<string> {
-    const base64Data = buffer.toString('base64')
-    const base64File = `data:${mimeType};base64,${base64Data}`
-
-    const formData = new FormData()
-    formData.append('base64Image', base64File)
-    formData.append('isOverlayRequired', 'false')
-    formData.append('filetype', 'PDF')
-    formData.append('detectOrientation', 'true')
-    formData.append('scale', 'true')
-    formData.append('OCREngine', '1')
-
-    console.log('Calling OCR.space API...')
-
-    const response = await fetch('https://api.ocr.space/parse/image', {
-        method: 'POST',
-        headers: { 'apikey': OCR_SPACE_API_KEY },
-        body: formData
-    })
-
-    const data = await response.json() as any
-
-    if (data.IsErroredOnProcessing) {
-        throw new Error(`OCR.space error: ${data.ErrorMessage?.[0] || 'Unknown error'}`)
+    if (!fullText) {
+        console.log('No text detected in file')
     }
 
-    if (data.OCRExitCode !== 1) {
-        throw new Error(`OCR failed with exit code: ${data.OCRExitCode}. ${data.ErrorMessage?.[0] || ''}`)
-    }
-
-    return data.ParsedResults?.map((r: any) => r.ParsedText || '').join('\n\n') || ''
-}
-
-async function extractTextFromPdf(buffer: Buffer): Promise<string> {
-    const pdfString = buffer.toString('latin1')
-    const textBlocks: string[] = []
-    const streamRegex = /stream\s*([\s\S]*?)\s*endstream/g
-    let match
-
-    while ((match = streamRegex.exec(pdfString)) !== null) {
-        const stream = match[1]
-        const textRegex = /\((.*?)\)Tj|\[(.*?)\]TJ/g
-        let textMatch
-        while ((textMatch = textRegex.exec(stream)) !== null) {
-            const text = textMatch[1] || textMatch[2]
-            if (text) {
-                const decoded = text
-                    .replace(/\\n/g, '\n')
-                    .replace(/\\r/g, '\r')
-                    .replace(/\\t/g, '\t')
-                    .replace(/\\\(/g, '(')
-                    .replace(/\\\)/g, ')')
-                    .replace(/\\\\/g, '\\')
-                textBlocks.push(decoded)
-            }
-        }
-    }
-
-    return textBlocks.join(' ').trim()
+    return fullText
 }
 
 function parseSourcesFromText(text: string): Array<{ id: string; text: string; type: string; title?: string }> {
