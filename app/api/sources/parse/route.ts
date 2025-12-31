@@ -12,23 +12,53 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'No file provided' }, { status: 400 })
         }
 
+        console.log('Processing file:', file.name, 'Type:', file.type, 'Size:', file.size, 'UseOCR:', useOCR)
+
         const bytes = await file.arrayBuffer()
         const buffer = Buffer.from(bytes)
 
         let text = ''
+        let method = ''
 
-        if (useOCR || file.type.startsWith('image/')) {
-            // Use Google Cloud Vision for OCR
-            text = await ocrWithGoogleVision(buffer)
-        } else {
-            // Try to extract embedded text from PDF first
-            text = await extractTextFromPdf(buffer)
+        // Determine processing method
+        const isImage = file.type.startsWith('image/')
+        const isPdf = file.type === 'application/pdf'
 
-            // If no text found, fallback to OCR
-            if (!text.trim()) {
+        if (isImage) {
+            // Images can use Google Vision OCR directly
+            if (useOCR) {
+                console.log('Using Google Vision OCR for image...')
                 text = await ocrWithGoogleVision(buffer)
+                method = 'google_vision'
+            } else {
+                return NextResponse.json({
+                    error: 'Images require OCR. Please enable the OCR option.',
+                    requiresOCR: true
+                }, { status: 400 })
             }
+        } else if (isPdf) {
+            // PDFs: try embedded text extraction first
+            console.log('Extracting embedded text from PDF...')
+            text = await extractTextFromPdf(buffer)
+            method = 'pdf_text'
+
+            if (!text.trim() && useOCR) {
+                // No embedded text found - inform user about PDF limitation
+                return NextResponse.json({
+                    error: 'This PDF appears to be scanned/image-based. Google Vision cannot directly process PDFs. Please convert your PDF to images (JPG/PNG) first, then upload those.',
+                    isPdfScan: true
+                }, { status: 400 })
+            } else if (!text.trim()) {
+                return NextResponse.json({
+                    error: 'No text found in PDF. This might be a scanned document. Please enable OCR and convert to images first.',
+                    isPdfScan: true
+                }, { status: 400 })
+            }
+        } else {
+            return NextResponse.json({ error: 'Unsupported file type. Please upload a PDF or image.' }, { status: 400 })
         }
+
+        console.log('Extracted text length:', text.length, 'Method:', method)
 
         // Parse the text into individual sources
         const sources = parseSourcesFromText(text)
@@ -36,11 +66,14 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({
             success: true,
             rawText: text,
-            sources
+            sources,
+            method
         })
     } catch (error) {
-        console.error('PDF processing error:', error)
-        return NextResponse.json({ error: 'Failed to process file: ' + (error as Error).message }, { status: 500 })
+        console.error('Processing error:', error)
+        return NextResponse.json({
+            error: 'Failed to process file: ' + (error as Error).message
+        }, { status: 500 })
     }
 }
 
@@ -60,11 +93,13 @@ async function ocrWithGoogleVision(buffer: Buffer): Promise<string> {
                     }
                 ],
                 imageContext: {
-                    languageHints: ['he', 'en', 'yi'] // Hebrew, English, Yiddish
+                    languageHints: ['he', 'en', 'yi']
                 }
             }
         ]
     }
+
+    console.log('Calling Google Vision API...')
 
     const response = await fetch(
         `https://vision.googleapis.com/v1/images:annotate?key=${GOOGLE_VISION_API_KEY}`,
@@ -77,15 +112,25 @@ async function ocrWithGoogleVision(buffer: Buffer): Promise<string> {
         }
     )
 
-    if (!response.ok) {
-        const errorData = await response.json() as any
-        throw new Error(`Google Vision API error: ${errorData.error?.message || response.statusText}`)
-    }
-
     const data = await response.json() as any
 
-    // Extract full text from the response
+    console.log('Google Vision response status:', response.status)
+
+    if (!response.ok) {
+        console.error('Google Vision API error:', data)
+        throw new Error(`Google Vision API error: ${data.error?.message || response.statusText}`)
+    }
+
+    // Check for errors in the response
+    if (data.responses?.[0]?.error) {
+        throw new Error(`Vision API error: ${data.responses[0].error.message}`)
+    }
+
     const fullText = data.responses?.[0]?.fullTextAnnotation?.text || ''
+
+    if (!fullText) {
+        console.log('No text detected in image')
+    }
 
     return fullText
 }
@@ -125,34 +170,28 @@ function parseSourcesFromText(text: string): Array<{ id: string; text: string; t
 
     const sources: Array<{ id: string; text: string; type: string; title?: string }> = []
 
-    // Split by multiple newlines, numbered patterns, or Hebrew letter patterns
-    // This handles typical source sheet formats
     const blocks = text
         .split(/\n{2,}/)
         .map(b => b.trim())
         .filter(b => b.length > 15)
 
-    blocks.forEach((block, index) => {
-        // Detect if primarily Hebrew
+    blocks.forEach((block) => {
         const hebrewChars = (block.match(/[\u0590-\u05FF]/g) || []).length
         const totalAlphaChars = (block.match(/[a-zA-Z\u0590-\u05FF]/g) || []).length
         const isHebrew = totalAlphaChars > 0 && (hebrewChars / totalAlphaChars) > 0.5
 
-        // Try to detect a title (first line if it looks like a reference)
         const lines = block.split('\n')
         let title = ''
         let content = block
 
-        // Check if first line looks like a source reference
         if (lines.length > 1) {
             const firstLine = lines[0].trim()
-            // Common patterns: starts with Hebrew book name, has chapter/verse markers, is short
             const looksLikeTitle = (
                 firstLine.length < 100 &&
                 (
-                    /^[א-ת]/.test(firstLine) || // Starts with Hebrew
-                    /רמב"ם|גמרא|משנה|שו"ע|רש"י|תוספות|מדרש|פרק|דף/.test(firstLine) || // Common source markers
-                    /^\d+[\.\)]/.test(firstLine) // Numbered
+                    /^[א-ת]/.test(firstLine) ||
+                    /רמב"ם|גמרא|משנה|שו"ע|רש"י|תוספות|מדרש|פרק|דף/.test(firstLine) ||
+                    /^\d+[\.\)]/.test(firstLine)
                 )
             )
 

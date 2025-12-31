@@ -78,17 +78,34 @@ export default function SourceManager() {
                 body: formData
             })
 
-            const data = await res.json() as { success: boolean; rawText: string; sources: ParsedSource[]; error?: string }
+            const data = await res.json() as {
+                success: boolean
+                rawText: string
+                sources: ParsedSource[]
+                error?: string
+                isPdfScan?: boolean
+                requiresOCR?: boolean
+            }
 
             if (data.success) {
                 setRawText(data.rawText)
                 setSources(data.sources)
+                if (data.sources.length === 0) {
+                    alert('No text was found in the file. Try a different file or add sources manually.')
+                }
             } else {
-                alert('Failed to process file: ' + (data.error || 'Unknown error'))
+                if (data.isPdfScan) {
+                    alert('⚠️ PDF Limitation\n\nThis PDF appears to be scanned/image-based. To process it:\n\n1. Convert the PDF to images (use a tool like PDF to JPG)\n2. Upload the images instead\n3. Enable the OCR option\n\nOr, you can screenshot each page and upload those.')
+                } else if (data.requiresOCR) {
+                    setForceOCR(true)
+                    alert('This is an image file. Please enable the OCR option and try again.')
+                } else {
+                    alert('Error: ' + (data.error || 'Unknown error'))
+                }
             }
         } catch (e) {
             console.error('Processing error:', e)
-            alert('Failed to process file')
+            alert('Failed to process file. Please try again.')
         } finally {
             setIsProcessing(false)
         }
@@ -249,6 +266,46 @@ export default function SourceManager() {
                         </button>
                     </div>
                 )}
+
+                {/* Paste Text Alternative */}
+                <details className="mt-4 border-t pt-4">
+                    <summary className="cursor-pointer text-sm font-medium text-primary hover:text-primary/80">
+                        📋 Or paste text directly (most reliable)
+                    </summary>
+                    <div className="mt-3 space-y-3">
+                        <p className="text-xs text-gray-500">
+                            Copy text from your source sheet and paste it below. Each paragraph becomes a separate source.
+                        </p>
+                        <textarea
+                            placeholder="Paste your source text here..."
+                            className="w-full h-48 p-3 border border-gray-300 rounded-lg font-serif text-base resize-none focus:ring-2 focus:ring-primary"
+                            dir="auto"
+                            onChange={(e) => setRawText(e.target.value)}
+                            value={rawText}
+                        />
+                        <button
+                            onClick={() => {
+                                if (rawText.trim()) {
+                                    const blocks = rawText.split(/\n{2,}/).filter(b => b.trim().length > 10)
+                                    const parsed = blocks.map(block => {
+                                        const hebrewChars = (block.match(/[\u0590-\u05FF]/g) || []).length
+                                        const total = block.length
+                                        return {
+                                            id: crypto.randomUUID(),
+                                            text: block.trim(),
+                                            type: (hebrewChars / total > 0.3 ? 'hebrew' : 'english') as 'hebrew' | 'english'
+                                        }
+                                    })
+                                    setSources(parsed)
+                                }
+                            }}
+                            disabled={!rawText.trim()}
+                            className="w-full py-2 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-colors disabled:opacity-50"
+                        >
+                            Parse Pasted Text
+                        </button>
+                    </div>
+                </details>
             </div>
 
             {/* Manual Add Section */}
