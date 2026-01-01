@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useRef } from 'react'
-import { Upload, Loader2, RefreshCw, X, Save, Plus } from 'lucide-react'
+import { Upload, Loader2, RefreshCw, X, Save, Plus, Trash2 } from 'lucide-react'
 import ReactCrop, { Crop, PercentCrop } from 'react-image-crop'
 import 'react-image-crop/dist/ReactCrop.css'
 
@@ -175,7 +175,7 @@ export default function SourceManager() {
 
             {/* Results Grid */}
             {!isProcessing && pageImages.length > 0 && (
-                <div className="space-y-12">
+                <div className="space-y-12 relative z-0">
                     {pageImages.map((img, pageIdx) => (
                         <div key={pageIdx} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                             <div className="bg-gray-50 px-4 py-2 border-b flex justify-between items-center">
@@ -187,7 +187,7 @@ export default function SourceManager() {
                                 {/* Base Image */}
                                 <img src={img} className="w-full block" />
 
-                                {/* Overlays / Editors */}
+                                {/* Overlays */}
                                 {sources.filter(s => s.pageIndex === pageIdx).map(source => (
                                     <div
                                         key={source.id}
@@ -199,65 +199,72 @@ export default function SourceManager() {
                                             height: `${source.crop.height}%`,
                                         }}
                                     >
-                                        {/* Crop Editor (Only visible active or hover? No, always editable?) 
-                                            Actually, rendering ReactCrop for EACH source is heavy and messy.
-                                            Better: Render a simple box. Click to activate ReactCrop for JUST that one.
-                                        */}
-
-                                        {editingSourceId === source.id ? (
-                                            <div className="absolute inset-0 -m-1 z-50">
-                                                <ReactCrop
-                                                    crop={source.crop}
-                                                    onChange={(_, p) => onUpdateCrop(source.id, p)}
-                                                    onComplete={() => setEditingSourceId(null)} // Save on release
-                                                    keepSelection
-                                                >
-                                                    <div className="w-full h-full opacity-0 pointer-events-none" />
-                                                    {/* Ghost element just to provide dimensions to ReactCrop? No, ReactCrop wraps image usually.
-                                                        
-                                                        Alternative: Just render standard resize handles manually or use a simplified visual.
-                                                        
-                                                        Actually, let's keep it SIMPLE. Just show the box with a title label.
-                                                        If they want to edit, they can click "Edit" mode.
-                                                        For now, just Drag-to-move boxes is complex to implement from scratch.
-                                                        
-                                                        Let's stick to: Visual Display.
-                                                     */}
-                                                </ReactCrop>
+                                        <div
+                                            className="w-full h-full border-2 border-blue-500 bg-blue-500/10 hover:bg-blue-500/20 cursor-pointer relative transition-all"
+                                            onClick={() => setEditingSourceId(source.id)}
+                                        >
+                                            <div className="absolute -top-6 left-0 bg-blue-600 text-white text-xs px-2 py-1 rounded shadow-sm whitespace-nowrap flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <span className="font-bold">{source.title}</span>
                                             </div>
-                                        ) : (
-                                            <div
-                                                className="w-full h-full border-2 border-blue-500 bg-blue-500/10 hover:bg-blue-500/20 cursor-pointer relative transition-all"
-                                                onClick={() => setEditingSourceId(source.id)}
-                                            >
-                                                <div className="absolute -top-6 left-0 bg-blue-600 text-white text-xs px-2 py-1 rounded shadow-sm whitespace-nowrap flex items-center gap-2">
-                                                    <span className="font-bold">{source.title}</span>
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation()
-                                                            setSources(sources.filter(s => s.id !== source.id))
-                                                        }}
-                                                        className="hover:bg-blue-700 rounded p-0.5"
-                                                    >
-                                                        <X className="w-3 h-3" />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        )}
+                                        </div>
                                     </div>
                                 ))}
-
-                                {/* Add Manual Source Area (Click empty space?) */}
-                                {/* For now, simple manual add button at top is safer. This is about VIEWING auto results. */}
                             </div>
                         </div>
                     ))}
 
-                    <div className="flex justify-end pt-8 pb-20 sticky bottom-0 bg-gradient-to-t from-white via-white to-transparent px-4">
-                        <button className="px-8 py-3 bg-blue-600 text-white font-bold rounded-full shadow-lg hover:bg-blue-700 hover:scale-105 transition-all flex items-center gap-2">
+                    {/* Floating Save Button */}
+                    <div className="flex justify-end pt-8 pb-20 sticky bottom-0 bg-gradient-to-t from-white via-white to-transparent px-4 z-10 pointer-events-none">
+                        <button className="pointer-events-auto px-8 py-3 bg-blue-600 text-white font-bold rounded-full shadow-lg hover:bg-blue-700 hover:scale-105 transition-all flex items-center gap-2">
                             <Save className="w-5 h-5" /> Save All to Database
                         </button>
                     </div>
+
+                    {/* Edit Modal (Z-50) */}
+                    {editingSourceId && (() => {
+                        const source = sources.find(s => s.id === editingSourceId)
+                        if (!source) return null
+                        const img = pageImages[source.pageIndex]
+
+                        return (
+                            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-8 animate-in fade-in duration-200">
+                                <div className="bg-white rounded-2xl w-full max-w-4xl h-[90vh] flex flex-col overflow-hidden shadow-2xl">
+                                    <div className="p-4 border-b flex justify-between items-center bg-gray-50">
+                                        <h3 className="font-bold text-lg">Adjust "{source.title}"</h3>
+                                        <button onClick={() => setEditingSourceId(null)} className="p-2 hover:bg-gray-200 rounded-full"><X className="w-5 h-5" /></button>
+                                    </div>
+
+                                    <div className="flex-1 overflow-auto bg-gray-100 p-8 flex justify-center">
+                                        <ReactCrop
+                                            crop={source.crop}
+                                            onChange={(_, p) => onUpdateCrop(source.id, p)}
+                                            className="shadow-lg bg-white"
+                                        >
+                                            <img src={img} className="max-h-[70vh] object-contain block" />
+                                        </ReactCrop>
+                                    </div>
+
+                                    <div className="p-4 border-t bg-gray-50 flex justify-between gap-4">
+                                        <button
+                                            onClick={() => {
+                                                setSources(sources.filter(s => s.id !== editingSourceId))
+                                                setEditingSourceId(null)
+                                            }}
+                                            className="text-red-600 hover:bg-red-50 px-4 py-2 rounded-lg font-medium flex items-center gap-2"
+                                        >
+                                            <Trash2 className="w-4 h-4" /> Delete
+                                        </button>
+                                        <button
+                                            onClick={() => setEditingSourceId(null)}
+                                            className="bg-blue-600 text-white px-8 py-2 rounded-lg font-bold hover:bg-blue-700 shadow-md transform transition active:scale-95"
+                                        >
+                                            Done
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )
+                    })()}
                 </div>
             )}
         </div>
