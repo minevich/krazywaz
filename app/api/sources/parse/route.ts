@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 const GOOGLE_VISION_API_KEY = process.env.GOOGLE_VISION_API_KEY || 'AIzaSyAXKKKN7H5WmZjQXipg7ghBQHkIxhVyWN0'
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.GOOGLE_VISION_API_KEY // Can use same Google Cloud key
 
 export async function POST(request: NextRequest) {
     try {
@@ -16,39 +17,102 @@ export async function POST(request: NextRequest) {
         const bytes = await file.arrayBuffer()
         const buffer = Buffer.from(bytes)
 
-        console.log('Using Google Vision API (Client-side pre-processing mode)...')
-        const text = await ocrWithGoogleVision(buffer, file.type)
+        console.log('Step 1: OCR with Google Vision...')
+        const rawText = await ocrWithGoogleVision(buffer, file.type)
+        console.log('Extracted text length:', rawText.length)
 
-        console.log('Extracted text length:', text.length)
+        if (rawText.length < 20) {
+            return NextResponse.json({
+                success: true,
+                rawText,
+                sources: [],
+                method: 'google_vision',
+                note: 'OCR extracted minimal text. Try a clearer image.'
+            })
+        }
 
-        let sources = parseSourcesFromText(text)
+        console.log('Step 2: AI-powered source parsing with Gemini...')
+        let sources = await parseWithGemini(rawText)
 
-        // Identify sources with Sefaria
-        console.log('Identifying sources with Sefaria...')
-        if (sources.length > 0) {
-            // Process in parallel with concurrency limit (e.g. 5) to be nice to API
-            const enrichedSources: any[] = []
-
-            // Chunked processing
-            for (let i = 0; i < sources.length; i += 5) {
-                const chunk = sources.slice(i, i + 5)
-                const results = await Promise.all(chunk.map(s => identifySefariaSource(s)))
-                enrichedSources.push(...results)
-            }
-            sources = enrichedSources
+        // Fallback to regex parsing if Gemini fails
+        if (!sources || sources.length === 0) {
+            console.log('Gemini parsing failed, falling back to regex...')
+            sources = parseSourcesFromText(rawText)
         }
 
         return NextResponse.json({
             success: true,
-            rawText: text,
+            rawText,
             sources,
-            method: 'google_vision'
+            method: 'google_vision_gemini'
         })
     } catch (error) {
         console.error('Processing error:', error)
         return NextResponse.json({
             error: 'Failed to process file: ' + (error as Error).message
         }, { status: 500 })
+    }
+}
+
+// AI-powered parsing using Gemini
+async function parseWithGemini(text: string): Promise<Array<{ id: string; text: string; type: string; title?: string }>> {
+    try {
+        const prompt = `You are an expert in Jewish religious texts. Analyze this Hebrew/Aramaic source sheet text and identify each individual source.
+
+For each source, provide:
+1. title: The source reference (e.g., "רש"י על בראשית א:א", "תלמוד בבלי ברכות ב.", "רמב"ם הלכות תשובה פ"א ה"א")
+2. text: The actual content of that source
+3. type: "hebrew" if mostly Hebrew/Aramaic, "english" if mostly English
+
+Return ONLY a valid JSON array, no other text. Example format:
+[{"title": "רש\"י על בראשית א:א", "text": "בראשית - בשביל התורה...", "type": "hebrew"}]
+
+If you cannot identify a specific source reference, use a descriptive title based on content.
+
+Here is the text to parse:
+${text.substring(0, 8000)}` // Limit to avoid token limits
+
+        const response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{ parts: [{ text: prompt }] }],
+                    generationConfig: {
+                        temperature: 0.1,
+                        maxOutputTokens: 4000
+                    }
+                })
+            }
+        )
+
+        if (!response.ok) {
+            console.error('Gemini API error:', response.status)
+            return []
+        }
+
+        const data = await response.json() as any
+        const content = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+
+        // Extract JSON from response (handle markdown code blocks)
+        let jsonStr = content.trim()
+        if (jsonStr.startsWith('```')) {
+            jsonStr = jsonStr.replace(/```json?\n?/g, '').replace(/```/g, '').trim()
+        }
+
+        const parsed = JSON.parse(jsonStr)
+
+        // Add IDs to each source
+        return parsed.map((s: any) => ({
+            id: crypto.randomUUID(),
+            title: s.title || 'Untitled Source',
+            text: s.text || '',
+            type: s.type || 'hebrew'
+        }))
+    } catch (e) {
+        console.error('Gemini parsing error:', e)
+        return []
     }
 }
 
