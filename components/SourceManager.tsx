@@ -54,13 +54,40 @@ export default function SourceManager() {
                 const imageUrl = await fileToBase64(images[i])
                 newPageImages.push(imageUrl)
 
-                // Start with ONE full-page source per page - user will slice it
-                newSources.push({
-                    id: crypto.randomUUID(),
-                    title: `Page ${i + 1}`,
-                    pageIndex: i,
-                    crop: { unit: '%', x: 0, y: 0, width: 100, height: 100 }
-                })
+                // Call API to find gaps and create regions
+                const formData = new FormData()
+                formData.append('file', images[i])
+
+                try {
+                    const res = await fetch('/api/sources/parse', { method: 'POST', body: formData })
+                    const data = await res.json() as { success: boolean; regions: any[] }
+
+                    if (data.success && data.regions) {
+                        data.regions.forEach((r: any) => {
+                            const [ymin, xmin, ymax, xmax] = r.box_2d || [0, 0, 1000, 1000]
+                            newSources.push({
+                                id: crypto.randomUUID(),
+                                title: r.title || `Source ${newSources.length + 1}`,
+                                pageIndex: i,
+                                crop: {
+                                    unit: '%',
+                                    x: xmin / 10,
+                                    y: ymin / 10,
+                                    width: (xmax - xmin) / 10,
+                                    height: (ymax - ymin) / 10
+                                }
+                            })
+                        })
+                    }
+                } catch (e) {
+                    // Fallback to full page
+                    newSources.push({
+                        id: crypto.randomUUID(),
+                        title: `Page ${i + 1}`,
+                        pageIndex: i,
+                        crop: { unit: '%', x: 0, y: 0, width: 100, height: 100 }
+                    })
+                }
             }
 
             setPageImages(newPageImages)
@@ -335,8 +362,8 @@ export default function SourceManager() {
                                     >
                                         <div
                                             className={`w-full h-full border-2 box-border transition-all ${sliceModePageId === pageIdx
-                                                    ? 'border-red-400 border-dashed bg-red-500/5'
-                                                    : 'border-blue-400 bg-blue-500/5 hover:bg-blue-500/10 cursor-pointer'
+                                                ? 'border-red-400 border-dashed bg-red-500/5'
+                                                : 'border-blue-400 bg-blue-500/5 hover:bg-blue-500/10 cursor-pointer'
                                                 }`}
                                             onClick={(e) => {
                                                 if (sliceModePageId !== pageIdx) {

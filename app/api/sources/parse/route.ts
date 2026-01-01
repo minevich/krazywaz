@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || ''
+import sharp from 'sharp'
 
 export async function POST(request: NextRequest) {
     try {
@@ -12,16 +11,13 @@ export async function POST(request: NextRequest) {
         }
 
         const bytes = await file.arrayBuffer()
-        const base64 = Buffer.from(bytes).toString('base64')
+        const buffer = Buffer.from(bytes)
         const mimeType = file.type.startsWith('image/') ? file.type : 'image/png'
 
-        // Try Gemini to find source markers
-        let regions = await findSourceMarkers(base64, mimeType)
+        // Analyze image to find natural break points (horizontal AND vertical)
+        const regions = await findBreakPoints(buffer)
 
-        // If failed, default to one full-page source
-        if (!regions || regions.length === 0) {
-            regions = [{ title: 'Source 1', box_2d: [0, 0, 1000, 1000] }]
-        }
+        const base64 = buffer.toString('base64')
 
         return NextResponse.json({
             success: true,
@@ -34,98 +30,122 @@ export async function POST(request: NextRequest) {
     }
 }
 
-async function findSourceMarkers(base64: string, mimeType: string) {
-    if (!GEMINI_API_KEY) {
-        return []
-    }
-
-    // Super detailed prompt focusing on finding NUMBER MARKERS
-    const prompt = `You are an expert at analyzing Jewish Torah source sheet scans.
-
-CAREFUL OBSERVATION REQUIRED:
-Look at this image VERY carefully. Find EVERY distinct source citation.
-Sources are marked by:
-- Handwritten or printed NUMBERS in circles or parentheses: ①②③ or (1)(2)(3) or just 1. 2. 3.
-- Hebrew letters as markers: א׳ ב׳ ג׳
-- Bold section headers like "רש"י" or "גמרא"
-- Clear paragraph breaks with whitespace
-
-YOUR TASK:
-For EACH source you find, give me its bounding box coordinates.
-The coordinates are [top, left, bottom, right] as percentages 0-1000 where:
-- 0,0 is top-left corner
-- 1000,1000 is bottom-right corner
-
-IMPORTANT:
-- Sources may be in MULTIPLE COLUMNS (side by side)
-- Sources may be DIFFERENT SIZES
-- Count ALL sources, even small ones
-- Be VERY precise with the boundaries
-
-Return a JSON array with EVERY source:
-[
-  {"label": "1", "box": [top, left, bottom, right]},
-  {"label": "2", "box": [top, left, bottom, right]},
-  ...
-]
-
-If you see 9 sources, return 9 objects.
-Return ONLY the JSON array, no other text.`
-
+async function findBreakPoints(imageBuffer: Buffer) {
     try {
-        const res = await fetch(
-            'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent',
-            {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-goog-api-key': GEMINI_API_KEY
-                },
-                body: JSON.stringify({
-                    contents: [{
-                        parts: [
-                            { text: prompt },
-                            { inline_data: { mime_type: mimeType, data: base64 } }
-                        ]
-                    }],
-                    generationConfig: {
-                        temperature: 0.1
-                    }
+        // Convert to grayscale and get raw pixel data
+        const { data, info } = await sharp(imageBuffer)
+            .grayscale()
+            .raw()
+            .toBuffer({ resolveWithObject: true })
+
+        const width = info.width
+        const height = info.height
+
+        // --- HORIZONTAL SCAN (find row gaps = Y splits) ---
+        const rowBrightness: number[] = []
+        for (let y = 0; y < height; y++) {
+            let sum = 0
+            for (let x = 0; x < width; x++) {
+                sum += data[y * width + x]
+            }
+            rowBrightness.push(sum / width)
+        }
+
+        // --- VERTICAL SCAN (find column gaps = X splits) ---
+        const colBrightness: number[] = []
+        for (let x = 0; x < width; x++) {
+            let sum = 0
+            for (let y = 0; y < height; y++) {
+                sum += data[y * width + x]
+            }
+            colBrightness.push(sum / height)
+        }
+
+        // Find gaps in both directions
+        const threshold = 245 // Very bright = white space
+        const minHGap = Math.floor(height * 0.008) // Min horizontal gap size
+        const minVGap = Math.floor(width * 0.02) // Min vertical gap size
+
+        const hGaps = findGaps(rowBrightness, threshold, minHGap)
+        const vGaps = findGaps(colBrightness, threshold, minVGap)
+
+        console.log(`Found ${hGaps.length} horizontal gaps, ${vGaps.length} vertical gaps`)
+
+        // Create Y split points from horizontal gaps
+        const ySplits = [0, ...hGaps.map(g => g.center), height]
+
+        // Create X split points from vertical gaps
+        // Only use significant vertical gaps (likely column dividers)
+        const significantVGaps = vGaps.filter(g => (g.end - g.start) > width * 0.02)
+        const xSplits = significantVGaps.length > 0
+            ? [0, ...significantVGaps.map(g => g.center), width]
+            : [0, width] // No columns detected
+
+        console.log(`Y splits: ${ySplits.length - 1} rows, X splits: ${xSplits.length - 1} columns`)
+
+        // Generate regions from grid
+        const regions: any[] = []
+
+        for (let yi = 0; yi < ySplits.length - 1; yi++) {
+            for (let xi = 0; xi < xSplits.length - 1; xi++) {
+                const yStart = ySplits[yi]
+                const yEnd = ySplits[yi + 1]
+                const xStart = xSplits[xi]
+                const xEnd = xSplits[xi + 1]
+
+                // Skip very small regions
+                const regionHeight = (yEnd - yStart) / height
+                const regionWidth = (xEnd - xStart) / width
+                if (regionHeight < 0.03 || regionWidth < 0.1) continue
+
+                // Convert to 0-1000 scale
+                const ymin = Math.floor((yStart / height) * 1000)
+                const ymax = Math.floor((yEnd / height) * 1000)
+                const xmin = Math.floor((xStart / width) * 1000)
+                const xmax = Math.floor((xEnd / width) * 1000)
+
+                regions.push({
+                    title: `Source ${regions.length + 1}`,
+                    box_2d: [ymin, xmin, ymax, xmax]
                 })
             }
-        )
-
-        if (!res.ok) {
-            console.error('Gemini error:', res.status)
-            return []
         }
 
-        const data = await res.json() as any
-        let text = data.candidates?.[0]?.content?.parts?.[0]?.text || '[]'
-
-        console.log('Gemini response:', text.substring(0, 500))
-
-        // Clean up response
-        if (text.includes('```')) {
-            const match = text.match(/```(?:json)?\s*([\s\S]*?)```/)
-            if (match) text = match[1]
-        }
-        text = text.trim()
-        if (!text.startsWith('[')) {
-            const arrayStart = text.indexOf('[')
-            if (arrayStart !== -1) text = text.substring(arrayStart)
+        // If nothing found, return full page
+        if (regions.length === 0) {
+            regions.push({ title: 'Source 1', box_2d: [0, 0, 1000, 1000] })
         }
 
-        const sources = JSON.parse(text)
-
-        // Convert to our format
-        return sources.map((s: any, i: number) => ({
-            title: s.label || `Source ${i + 1}`,
-            box_2d: s.box || [0, 0, 1000, 1000]
-        }))
+        console.log(`Created ${regions.length} source regions`)
+        return regions
 
     } catch (e) {
-        console.error('Gemini parse error:', e)
-        return []
+        console.error('Image processing error:', e)
+        return [{ title: 'Source 1', box_2d: [0, 0, 1000, 1000] }]
     }
+}
+
+function findGaps(brightness: number[], threshold: number, minSize: number) {
+    const gaps: { start: number; end: number; center: number }[] = []
+    let gapStart = -1
+
+    for (let i = 0; i < brightness.length; i++) {
+        const isWhite = brightness[i] > threshold
+
+        if (isWhite && gapStart === -1) {
+            gapStart = i
+        } else if (!isWhite && gapStart !== -1) {
+            const gapEnd = i
+            if (gapEnd - gapStart >= minSize) {
+                gaps.push({
+                    start: gapStart,
+                    end: gapEnd,
+                    center: Math.floor((gapStart + gapEnd) / 2)
+                })
+            }
+            gapStart = -1
+        }
+    }
+
+    return gaps
 }
