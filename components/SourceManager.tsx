@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useCallback, useRef, useEffect } from 'react'
-import { Upload, Loader2, Trash2, Plus, ArrowLeft, ArrowRight, Layers, Layout, Check, ChevronRight } from 'lucide-react'
-import ReactCrop, { Crop, PixelCrop, PercentCrop } from 'react-image-crop'
+import { useState, useCallback, useRef } from 'react'
+import { Upload, Loader2, RefreshCw, X, Save, Plus } from 'lucide-react'
+import ReactCrop, { Crop, PercentCrop } from 'react-image-crop'
 import 'react-image-crop/dist/ReactCrop.css'
 
 interface Source {
@@ -10,7 +10,6 @@ interface Source {
     title: string
     pageIndex: number
     crop: PercentCrop
-    imageUrl: string
 }
 
 export default function SourceManager() {
@@ -18,92 +17,93 @@ export default function SourceManager() {
     const [isProcessing, setIsProcessing] = useState(false)
     const [sources, setSources] = useState<Source[]>([])
     const [pageImages, setPageImages] = useState<string[]>([])
-    const [activePage, setActivePage] = useState<number>(0)
 
-    // Editor State
-    const [activeSourceId, setActiveSourceId] = useState<string | null>(null)
-    const [editorCrop, setEditorCrop] = useState<Crop>()
-    const imgRef = useRef<HTMLImageElement>(null)
-    const listRef = useRef<HTMLDivElement>(null)
+    // Simple state: Just one active source being edited (optional)
+    const [editingSourceId, setEditingSourceId] = useState<string | null>(null)
 
     const handleDrop = useCallback((e: React.DragEvent) => {
         e.preventDefault()
         const f = e.dataTransfer.files[0]
         if (f) {
             setFile(f)
-            setSources([])
-            setPageImages([])
-            setActivePage(0)
+            processFile(f) // Auto-start
         }
     }, [])
 
-    const processFile = async () => {
-        if (!file) return
+    const processFile = async (f: File) => {
         setIsProcessing(true)
+        setSources([])
+        setPageImages([])
 
         try {
-            // 1. Convert PDF/Image to Array of Images
+            // 1. Convert PDF to Images
             let images: File[] = []
-            if (file.type === 'application/pdf') {
-                images = await pdfToImages(file)
+            if (f.type === 'application/pdf') {
+                images = await pdfToImages(f)
             } else {
-                images = [file]
+                images = [f]
             }
 
             const newPageImages: string[] = []
             const newSources: Source[] = []
 
-            // 2. Process each page with AI
+            // 2. Process ALL pages
             for (let i = 0; i < images.length; i++) {
                 const imageUrl = await fileToBase64(images[i])
                 newPageImages.push(imageUrl)
 
+                // 3. AI Analysis
                 const formData = new FormData()
                 formData.append('file', images[i])
 
                 try {
                     const res = await fetch('/api/sources/parse', { method: 'POST', body: formData })
-                    const data = await res.json() as { success: boolean; regions: any[]; error?: string }
+                    const data = await res.json() as { success: boolean; regions: any[]; image: string }
 
                     if (data.success && data.regions) {
                         data.regions.forEach((r: any, idx: number) => {
+                            // Convert standard [ymin, xmin, ymax, xmax] (0-1000) to %
+                            const [ymin, xmin, ymax, xmax] = r.box_2d || [r.y * 10, 0, (r.y + r.height) * 10, 1000]
+
                             newSources.push({
                                 id: crypto.randomUUID(),
                                 title: r.title || `Source ${newSources.length + 1}`,
                                 pageIndex: i,
-                                imageUrl: imageUrl,
                                 crop: {
                                     unit: '%',
-                                    x: 0,
-                                    y: r.y ?? 0,
-                                    width: 100,
-                                    height: r.height ?? 20
+                                    x: xmin / 10,
+                                    y: ymin / 10,
+                                    width: (xmax - xmin) / 10,
+                                    height: (ymax - ymin) / 10
                                 }
                             })
                         })
                     }
                 } catch (e) {
-                    console.error('AI Error:', e)
+                    console.error('AI Error', e)
                 }
             }
 
             setPageImages(newPageImages)
             setSources(newSources)
-            if (newSources.length > 0) setActiveSourceId(newSources[0].id)
 
         } catch (e) {
-            alert('Error: ' + e)
+            alert('Error processing file: ' + e)
         } finally {
             setIsProcessing(false)
         }
     }
 
+    const onUpdateCrop = (id: string, c: PercentCrop) => {
+        setSources(sources.map(s => s.id === id ? { ...s, crop: c } : s))
+    }
+
+    // --- Helpers ---
     const pdfToImages = async (pdfFile: File): Promise<File[]> => {
         const pdfjsLib = await import('pdfjs-dist')
         pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'
         const pdf = await pdfjsLib.getDocument({ data: await pdfFile.arrayBuffer() }).promise
         const files: File[] = []
-
         for (let i = 1; i <= pdf.numPages; i++) {
             const page = await pdf.getPage(i)
             const viewport = page.getViewport({ scale: 2 })
@@ -121,274 +121,145 @@ export default function SourceManager() {
         const reader = new FileReader(); reader.onload = () => r(reader.result as string); reader.readAsDataURL(f)
     })
 
-    const activeSource = sources.find(s => s.id === activeSourceId)
-
-    // Sync editor crop when switching sources
-    useEffect(() => {
-        if (activeSource) {
-            setEditorCrop(activeSource.crop)
-            setActivePage(activeSource.pageIndex)
-            // Scroll list item into view
-            const el = document.getElementById(`source-item-${activeSource.id}`)
-            el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
-        }
-    }, [activeSourceId])
-
-    const onCropChange = (c: Crop, p: PercentCrop) => {
-        setEditorCrop(p)
-    }
-
-    const onCropComplete = (c: Crop, p: PercentCrop) => {
-        if (!activeSourceId) return
-        setSources(sources.map(s => s.id === activeSourceId ? { ...s, crop: p } : s))
-    }
-
-    const addNewSource = () => {
-        const newSrc: Source = {
-            id: crypto.randomUUID(),
-            title: `New Source`,
-            pageIndex: activePage,
-            imageUrl: pageImages[activePage],
-            crop: { unit: '%', x: 5, y: 5, width: 90, height: 20 }
-        }
-        setSources([...sources, newSrc])
-        setActiveSourceId(newSrc.id)
-    }
-
     return (
-        <div className="max-w-[1600px] mx-auto p-6 h-[90vh] flex flex-col gap-6">
-            <h1 className="text-2xl font-bold text-gray-800 shrink-0">Content Extraction Studio</h1>
+        <div className="max-w-5xl mx-auto p-8 font-sans">
+            {/* Header / Upload */}
+            <div className="flex items-center justify-between mb-8">
+                <div>
+                    <h1 className="text-2xl font-bold text-gray-900">Source Extraction</h1>
+                    <p className="text-gray-500 text-sm mt-1">AI-Powered Source Sheet Parser</p>
+                </div>
 
-            <div className="flex-1 flex gap-6 min-h-0">
-                {/* 1. Source List */}
-                <div className="w-80 flex flex-col bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden shrink-0">
-                    <div className="p-4 border-b bg-gray-50 flex items-center justify-between shrink-0">
-                        <h2 className="font-bold text-gray-700 flex items-center gap-2">
-                            <Layers className="w-4 h-4" />
-                            Sources ({sources.length})
-                        </h2>
-                        <button onClick={addNewSource} className="p-1.5 hover:bg-blue-100 rounded text-blue-600 transition-colors">
-                            <Plus className="w-5 h-5" />
+                {file && (
+                    <div className="flex gap-2">
+                        <button
+                            onClick={() => processFile(file)}
+                            className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm font-medium"
+                        >
+                            <RefreshCw className={`w-4 h-4 ${isProcessing ? 'animate-spin' : ''}`} /> Re-Run Analysis
+                        </button>
+                        <button
+                            onClick={() => { setFile(null); setSources([]); setPageImages([]); }}
+                            className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg text-sm font-medium ml-2"
+                        >
+                            Reset
                         </button>
                     </div>
-
-                    <div ref={listRef} className="flex-1 overflow-y-auto p-2 space-y-1">
-                        {sources.length === 0 && !isProcessing && (
-                            <div className="text-center p-8 text-gray-400 text-sm">
-                                No sources yet.<br />Upload a file to begin.
-                            </div>
-                        )}
-
-                        {sources.map((s, i) => (
-                            <div
-                                id={`source-item-${s.id}`}
-                                key={s.id}
-                                onClick={() => setActiveSourceId(s.id)}
-                                className={`p-3 rounded-lg text-sm cursor-pointer border transition-all duration-200
-                                    ${activeSourceId === s.id ? 'bg-blue-50 border-blue-300 ring-1 ring-blue-300 shadow-sm' : 'bg-white border-gray-100 hover:border-blue-200 hover:bg-gray-50'}`}
-                            >
-                                <div className="flex items-center justify-between mb-1">
-                                    <span className={`font-bold ${activeSourceId === s.id ? 'text-blue-700' : 'text-gray-500'}`}>#{i + 1}</span>
-                                    <span className="text-[10px] bg-gray-100 px-1.5 py-0.5 rounded text-gray-500 font-medium">Page {s.pageIndex + 1}</span>
-                                </div>
-                                <input
-                                    value={s.title}
-                                    onChange={(e) => setSources(sources.map(x => x.id === s.id ? { ...x, title: e.target.value } : x))}
-                                    className="w-full bg-transparent border-none p-0 focus:ring-0 text-gray-800 font-medium placeholder-gray-400"
-                                    placeholder="Enter title..."
-                                    onClick={e => e.stopPropagation()}
-                                />
-                            </div>
-                        ))}
-                    </div>
-                </div>
-
-                {/* 2. Main Editor Canvas */}
-                <div className="flex-1 flex flex-col bg-gray-100 rounded-xl overflow-hidden relative border border-gray-300 shadow-inner">
-                    {/* Upload Overlay */}
-                    {!file && (
-                        <div
-                            onDrop={handleDrop}
-                            onDragOver={e => e.preventDefault()}
-                            className="absolute inset-0 flex flex-col items-center justify-center bg-white z-20 cursor-pointer hover:bg-gray-50 transition-colors"
-                            onClick={() => document.getElementById('finput')?.click()}
-                        >
-                            <div className="bg-blue-50 p-6 rounded-full mb-4">
-                                <Upload className="w-12 h-12 text-blue-500" />
-                            </div>
-                            <h3 className="text-xl font-bold text-gray-800 mb-2">Upload PDF or Image</h3>
-                            <p className="text-gray-500 font-medium">Drag & drop or click to browse</p>
-                            <input id="finput" type="file" className="hidden" accept=".pdf,image/*" onChange={e => e.target.files?.[0] && setFile(e.target.files[0])} />
-                        </div>
-                    )}
-
-                    {/* Loader */}
-                    {isProcessing && (
-                        <div className="absolute inset-0 bg-white/90 z-30 flex flex-col items-center justify-center backdrop-blur-sm">
-                            <Loader2 className="w-12 h-12 animate-spin text-blue-600 mb-4" />
-                            <h3 className="text-lg font-bold text-gray-800">Analyzing Document Structure...</h3>
-                            <p className="text-gray-500">AI is identifying source boundaries.</p>
-                        </div>
-                    )}
-
-                    {/* Toolbar */}
-                    {file && (
-                        <div className="h-14 bg-white border-b flex items-center justify-between px-6 z-10 shrink-0 shadow-sm">
-                            <div className="flex items-center gap-4">
-                                <span className="font-bold text-gray-700 flex items-center gap-2">
-                                    <Layers className="w-4 h-4 text-gray-400" />
-                                    Page {activePage + 1} <span className="text-gray-400 font-normal">of {pageImages.length}</span>
-                                </span>
-                                <div className="flex bg-gray-100 rounded-lg p-1 gap-1">
-                                    <button
-                                        onClick={() => setActivePage(Math.max(0, activePage - 1))}
-                                        disabled={activePage === 0}
-                                        className="p-1.5 hover:bg-white rounded-md disabled:opacity-30 transition-all"
-                                    >
-                                        <ArrowLeft className="w-4 h-4" />
-                                    </button>
-                                    <button
-                                        onClick={() => setActivePage(Math.min(pageImages.length - 1, activePage + 1))}
-                                        disabled={activePage === pageImages.length - 1}
-                                        className="p-1.5 hover:bg-white rounded-md disabled:opacity-30 transition-all"
-                                    >
-                                        <ArrowRight className="w-4 h-4" />
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div className="flex gap-3">
-                                <button onClick={processFile} className="px-4 py-1.5 bg-gray-800 text-white text-sm font-medium rounded-lg hover:bg-black transition-colors shadow-sm">
-                                    Re-Run AI
-                                </button>
-                                <button onClick={() => setFile(null)} className="px-4 py-1.5 text-red-600 text-sm font-medium hover:bg-red-50 rounded-lg transition-colors">
-                                    Close File
-                                </button>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Editor Area */}
-                    <div className="flex-1 overflow-auto p-8 flex justify-center items-start bg-slate-100/50">
-                        {pageImages[activePage] && (
-                            <div className="relative shadow-2xl bg-white ring-1 ring-gray-900/5">
-                                {activeSourceId && activeSource?.pageIndex === activePage ? (
-                                    <ReactCrop
-                                        crop={editorCrop}
-                                        onChange={onCropChange}
-                                        onComplete={onCropComplete}
-                                        className="max-h-[75vh]"
-                                        keepSelection
-                                    >
-                                        <img
-                                            ref={imgRef}
-                                            src={pageImages[activePage]}
-                                            className="max-h-[75vh] object-contain block select-none"
-                                            onLoad={(e) => {
-                                                // Reset crop if invalid
-                                            }}
-                                        />
-                                    </ReactCrop>
-                                ) : (
-                                    <div className="relative cursor-crosshair">
-                                        <img
-                                            src={pageImages[activePage]}
-                                            className="max-h-[75vh] object-contain block select-none"
-                                        />
-                                        {sources.filter(s => s.pageIndex === activePage).map(s => (
-                                            <div
-                                                key={s.id}
-                                                onClick={(e) => { e.stopPropagation(); setActiveSourceId(s.id); }}
-                                                className="absolute border-2 border-blue-500 bg-blue-500/10 hover:bg-blue-500/20 transition-colors z-10 group"
-                                                style={{
-                                                    left: s.crop.x + '%',
-                                                    top: s.crop.y + '%',
-                                                    width: s.crop.width + '%',
-                                                    height: s.crop.height + '%'
-                                                }}
-                                            >
-                                                <span className="absolute top-0 right-0 bg-blue-600 text-white text-[10px] px-1.5 py-0.5 rounded-bl opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20 shadow-sm">
-                                                    {s.title}
-                                                </span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                {/* 3. Validation / Preview Column */}
-                <div className="w-96 flex flex-col bg-white border border-gray-200 rounded-xl p-5 shadow-sm shrink-0">
-                    <h3 className="font-bold text-gray-700 mb-4 flex items-center gap-2">
-                        <Layout className="w-5 h-5 text-gray-500" />
-                        Details & Preview
-                    </h3>
-
-                    {activeSource ? (
-                        <div className="flex-1 flex flex-col min-h-0 space-y-4">
-                            {/* Scrollable Preview Area */}
-                            <div className="bg-gray-50 rounded-lg border border-gray-200 flex-1 overflow-auto relative min-h-[300px] shadow-inner">
-                                <div className="w-full relative bg-white">
-                                    <div style={{ paddingBottom: `${(activeSource.crop.height / activeSource.crop.width) * 100}%` }}></div>
-                                    <img
-                                        src={pageImages[activeSource.pageIndex]}
-                                        className="absolute top-0 left-0 max-w-none origin-top-left select-none"
-                                        style={{
-                                            width: `${100 / (activeSource.crop.width / 100)}%`,
-                                            left: `-${activeSource.crop.x * (100 / activeSource.crop.width)}%`,
-                                            top: `-${activeSource.crop.y * (100 / activeSource.crop.width)}%`
-                                        }}
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="space-y-3 pt-2">
-                                <div className="grid grid-cols-2 gap-4 text-xs text-gray-500 bg-gray-50 p-3 rounded-lg border border-gray-100">
-                                    <div>
-                                        <span className="block font-semibold text-gray-700">Position</span>
-                                        X: {Math.round(activeSource.crop.x)}% <br />
-                                        Y: {Math.round(activeSource.crop.y)}%
-                                    </div>
-                                    <div>
-                                        <span className="block font-semibold text-gray-700">Dimensions</span>
-                                        W: {Math.round(activeSource.crop.width)}% <br />
-                                        H: {Math.round(activeSource.crop.height)}%
-                                    </div>
-                                </div>
-
-                                <button
-                                    onClick={() => {
-                                        const idx = sources.findIndex(s => s.id === activeSourceId)
-                                        const next = sources[idx + 1]
-                                        if (next) setActiveSourceId(next.id)
-                                    }}
-                                    className="w-full py-2.5 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 active:bg-blue-800 transition-colors shadow-sm flex items-center justify-center gap-2"
-                                >
-                                    Confirm & Next <ChevronRight className="w-4 h-4" />
-                                </button>
-
-                                <button
-                                    onClick={() => {
-                                        const newSrcs = sources.filter(s => s.id !== activeSourceId)
-                                        setSources(newSrcs)
-                                        setActiveSourceId(newSrcs[0]?.id || null)
-                                    }}
-                                    className="w-full py-2.5 border border-red-200 text-red-600 rounded-lg font-medium hover:bg-red-50 transition-colors"
-                                >
-                                    Delete Source
-                                </button>
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="flex-1 flex flex-col items-center justify-center text-gray-400 text-sm">
-                            <Layers className="w-12 h-12 mb-3 text-gray-200" />
-                            <p>Select a source to view details</p>
-                        </div>
-                    )}
-                </div>
+                )}
             </div>
+
+            {/* Empty State */}
+            {!file && (
+                <div
+                    onDrop={handleDrop}
+                    onDragOver={e => e.preventDefault()}
+                    onClick={() => document.getElementById('uploader')?.click()}
+                    className="border-2 border-dashed border-gray-200 rounded-2xl p-16 flex flex-col items-center justify-center cursor-pointer hover:border-blue-500 hover:bg-blue-50/50 transition-all group"
+                >
+                    <div className="bg-blue-50 p-4 rounded-full mb-4 group-hover:scale-110 transition-transform">
+                        <Upload className="w-8 h-8 text-blue-600" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-gray-900">Upload Source Sheet</h3>
+                    <p className="text-gray-500 mt-2">PDFs or Images supported</p>
+                    <input id="uploader" type="file" className="hidden" accept=".pdf,image/*" onChange={e => e.target.files?.[0] && setFile(e.target.files[0]) && processFile(e.target.files[0])} />
+                </div>
+            )}
+
+            {/* Processing */}
+            {isProcessing && (
+                <div className="text-center py-20 animate-pulse">
+                    <Loader2 className="w-10 h-10 text-blue-600 animate-spin mx-auto mb-4" />
+                    <p className="text-gray-500 font-medium">Analyzing layout & geometry...</p>
+                </div>
+            )}
+
+            {/* Results Grid */}
+            {!isProcessing && pageImages.length > 0 && (
+                <div className="space-y-12">
+                    {pageImages.map((img, pageIdx) => (
+                        <div key={pageIdx} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                            <div className="bg-gray-50 px-4 py-2 border-b flex justify-between items-center">
+                                <span className="font-semibold text-gray-700 text-sm">Page {pageIdx + 1}</span>
+                                <span className="text-xs text-gray-400">{sources.filter(s => s.pageIndex === pageIdx).length} sources detected</span>
+                            </div>
+
+                            <div className="relative">
+                                {/* Base Image */}
+                                <img src={img} className="w-full block" />
+
+                                {/* Overlays / Editors */}
+                                {sources.filter(s => s.pageIndex === pageIdx).map(source => (
+                                    <div
+                                        key={source.id}
+                                        className="absolute group z-10"
+                                        style={{
+                                            left: `${source.crop.x}%`,
+                                            top: `${source.crop.y}%`,
+                                            width: `${source.crop.width}%`,
+                                            height: `${source.crop.height}%`,
+                                        }}
+                                    >
+                                        {/* Crop Editor (Only visible active or hover? No, always editable?) 
+                                            Actually, rendering ReactCrop for EACH source is heavy and messy.
+                                            Better: Render a simple box. Click to activate ReactCrop for JUST that one.
+                                        */}
+
+                                        {editingSourceId === source.id ? (
+                                            <div className="absolute inset-0 -m-1 z-50">
+                                                <ReactCrop
+                                                    crop={source.crop}
+                                                    onChange={(_, p) => onUpdateCrop(source.id, p)}
+                                                    onComplete={() => setEditingSourceId(null)} // Save on release
+                                                    keepSelection
+                                                >
+                                                    <div className="w-full h-full opacity-0 pointer-events-none" />
+                                                    {/* Ghost element just to provide dimensions to ReactCrop? No, ReactCrop wraps image usually.
+                                                        
+                                                        Alternative: Just render standard resize handles manually or use a simplified visual.
+                                                        
+                                                        Actually, let's keep it SIMPLE. Just show the box with a title label.
+                                                        If they want to edit, they can click "Edit" mode.
+                                                        For now, just Drag-to-move boxes is complex to implement from scratch.
+                                                        
+                                                        Let's stick to: Visual Display.
+                                                     */}
+                                                </ReactCrop>
+                                            </div>
+                                        ) : (
+                                            <div
+                                                className="w-full h-full border-2 border-blue-500 bg-blue-500/10 hover:bg-blue-500/20 cursor-pointer relative transition-all"
+                                                onClick={() => setEditingSourceId(source.id)}
+                                            >
+                                                <div className="absolute -top-6 left-0 bg-blue-600 text-white text-xs px-2 py-1 rounded shadow-sm whitespace-nowrap flex items-center gap-2">
+                                                    <span className="font-bold">{source.title}</span>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation()
+                                                            setSources(sources.filter(s => s.id !== source.id))
+                                                        }}
+                                                        className="hover:bg-blue-700 rounded p-0.5"
+                                                    >
+                                                        <X className="w-3 h-3" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+
+                                {/* Add Manual Source Area (Click empty space?) */}
+                                {/* For now, simple manual add button at top is safer. This is about VIEWING auto results. */}
+                            </div>
+                        </div>
+                    ))}
+
+                    <div className="flex justify-end pt-8 pb-20 sticky bottom-0 bg-gradient-to-t from-white via-white to-transparent px-4">
+                        <button className="px-8 py-3 bg-blue-600 text-white font-bold rounded-full shadow-lg hover:bg-blue-700 hover:scale-105 transition-all flex items-center gap-2">
+                            <Save className="w-5 h-5" /> Save All to Database
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }

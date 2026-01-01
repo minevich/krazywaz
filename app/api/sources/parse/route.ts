@@ -40,34 +40,27 @@ async function findSourceRegions(base64: string, mimeType: string) {
         return []
     }
 
-    const prompt = `You are an expert Torah scholar and layout specialist. Analyze this source sheet image to identify distinct holy sources for cropping.
+    const prompt = `You are a Layout Analysis AI specialized in Hebrew Text.
 
-THE STRUCTURE:
-Torah source sheets typically consist of vertically stacked sources.
-Separators include:
-1. **Numbering**: Look for numbers (1, 2, 3) or Hebrew letters (א, ב, ג) at the start of a block.
-2. **Headers**: Bold or larger text indicating the book name (e.g., "רש"י בראשית", "תלמוד בבלי", "רמב"ם").
-3. **Spacing**: Significant vertical whitespace between blocks.
-4. **Dividers**: Horizontal lines.
+Task: Detect the exact bounding box for EACH distinct source/paragraph on this page.
+Sources are separated by:
+- Numbering (1, 2, 3.. or א, ב, ג..)
+- Headers (Bold text like "רש\"י")
+- Spacing (Vertical gaps)
+- Horizontal lines
 
-YOUR TASK:
-Identify the vertical boundaries (y-axis) for EACH distinct source.
-- **Start (y)**: The very top pixel of the source's header/number.
-- **Height**: The total height covering the header and all the text of that source.
+Return a JSON array of objects.
+Each object must have:
+- title: A short label (e.g. "Rashi", "Source 1")
+- box_2d: [ymin, xmin, ymax, xmax]
+  - ymin, xmin, ymax, xmax are integers from 0 to 1000 (normalized coordinates).
+  - 0,0 is top-left. 1000,1000 is bottom-right.
+  - TIGHTLY crop the text block.
 
-GUIDELINES:
-- **Precision**: Margins should be tight but include all text/headers.
-- **Completeness**: Capture EVERY source on the page.
-- **No Overlap**: Sources generally don't overlap.
-- **Columns**: If the page has two columns, treat them as horizontal regions if possible, or just identifying the vertical blocks is sufficient for now (we process full width).
-
-Return a JSON array of regions:
+Example:
 [
-  {
-    "title": "Inferred Title (e.g. 'Rashi - Genesis 1:1')", 
-    "y": percentage_from_top (0-100), 
-    "height": percentage_height (0-100)
-  }
+  { "title": "Source 1", "box_2d": [10, 50, 250, 950] },
+  { "title": "Source 2", "box_2d": [260, 50, 400, 950] }
 ]
 
 Return ONLY valid JSON.`
