@@ -68,82 +68,36 @@ export default function SourceManager() {
         setIsProcessing(true)
 
         try {
-            let extractedText = ''
+            // Send file directly to API - Claude supports PDFs natively
+            console.log('Sending file to Claude for processing...')
 
-            if (file.type === 'application/pdf') {
-                // STEP 1: Try to extract embedded text from PDF (works for digital PDFs)
-                console.log('Step 1: Extracting embedded text from PDF...')
-                extractedText = await extractTextFromPdf(file)
-                console.log(`Extracted ${extractedText.length} characters of embedded text`)
+            const formData = new FormData()
+            formData.append('file', file, file.name)
+
+            const res = await fetch('/api/sources/parse', {
+                method: 'POST',
+                body: formData
+            })
+
+            const data = await res.json() as {
+                success: boolean
+                rawText: string
+                sources: ParsedSource[]
+                error?: string
+                method?: string
             }
 
-            // If we got good embedded text (more than 100 chars), use it directly
-            if (extractedText.length > 100) {
-                console.log('Using embedded PDF text (no OCR needed!)')
+            if (data.success) {
+                console.log(`Processed with ${data.method}, found ${data.sources?.length || 0} sources`)
+                setRawText(data.rawText || '')
+                setSources(data.sources || [])
 
-                // Send to server for AI parsing
-                const res = await fetch('/api/sources/parse-text', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text: extractedText })
-                })
-
-                const data = await res.json() as { success: boolean; sources: ParsedSource[] }
-
-                if (data.success && data.sources?.length > 0) {
-                    setRawText(extractedText)
-                    setSources(data.sources)
-                    return
+                if (!data.sources?.length) {
+                    alert('No sources found. Try the manual paste option below.')
                 }
-            }
-
-            // STEP 2: Fallback to OCR (for scanned PDFs or images)
-            console.log('Step 2: Falling back to OCR...')
-            let filesToProcess: { blob: Blob; name: string }[] = []
-
-            if (file.type === 'application/pdf') {
-                const images = await convertPdfToImages(file)
-                filesToProcess = images.map((blob, i) => ({ blob, name: `page-${i + 1}.png` }))
-                console.log(`Converted PDF to ${images.length} images for OCR`)
             } else {
-                filesToProcess = [{ blob: file, name: file.name }]
-            }
-
-            let allText = ''
-            let allSources: ParsedSource[] = []
-
-            for (let i = 0; i < filesToProcess.length; i++) {
-                const { blob, name } = filesToProcess[i]
-                console.log(`OCR processing ${name} (${i + 1}/${filesToProcess.length})`)
-
-                const formData = new FormData()
-                formData.append('file', blob, name)
-
-                const res = await fetch('/api/sources/parse', {
-                    method: 'POST',
-                    body: formData
-                })
-
-                const data = await res.json() as {
-                    success: boolean
-                    rawText: string
-                    sources: ParsedSource[]
-                    error?: string
-                }
-
-                if (data.success) {
-                    allText += data.rawText + '\n\n'
-                    allSources = [...allSources, ...data.sources]
-                } else {
-                    console.error('Error processing page:', data.error)
-                }
-            }
-
-            setRawText(allText.trim())
-            setSources(allSources)
-
-            if (allSources.length === 0) {
-                alert('No sources could be extracted. Try the manual paste option below.')
+                console.error('API error:', data.error)
+                alert('Failed to process: ' + (data.error || 'Unknown error'))
             }
         } catch (e) {
             console.error('Processing error:', e)
