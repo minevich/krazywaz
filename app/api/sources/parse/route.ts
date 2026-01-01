@@ -40,33 +40,37 @@ async function findSourceRegions(base64: string, mimeType: string) {
         return []
     }
 
-    const prompt = `Analyze this Hebrew source sheet image. Your job is to identify where each individual source/text begins and ends.
+    const prompt = `You are an expert Torah scholar and layout specialist. Analyze this source sheet image to identify distinct holy sources for cropping.
 
-LOOK FOR THESE SEPARATORS:
-- Numbers (1, 2, 3 or א, ב, ג) at the start of sources
-- Bold headers or titles
-- Larger gaps/whitespace between text blocks
-- Horizontal lines
-- Different fonts or indentation
+THE STRUCTURE:
+Torah source sheets typically consist of vertically stacked sources.
+Separators include:
+1. **Numbering**: Look for numbers (1, 2, 3) or Hebrew letters (א, ב, ג) at the start of a block.
+2. **Headers**: Bold or larger text indicating the book name (e.g., "רש"י בראשית", "תלמוד בבלי", "רמב"ם").
+3. **Spacing**: Significant vertical whitespace between blocks.
+4. **Dividers**: Horizontal lines.
 
-For EACH separate source you identify, give me:
-- title: The source name if visible (like "רש"י", "גמרא ברכות", "רמב"ם"), or "Source 1", "Source 2" etc.
-- y: Where this source STARTS as a percentage from the top (0 = very top, 100 = very bottom)
-- height: How tall this source is as a percentage of the page
+YOUR TASK:
+Identify the vertical boundaries (y-axis) for EACH distinct source.
+- **Start (y)**: The very top pixel of the source's header/number.
+- **Height**: The total height covering the header and all the text of that source.
 
-Example response for a page with 3 sources:
+GUIDELINES:
+- **Precision**: Margins should be tight but include all text/headers.
+- **Completeness**: Capture EVERY source on the page.
+- **No Overlap**: Sources generally don't overlap.
+- **Columns**: If the page has two columns, treat them as horizontal regions if possible, or just identifying the vertical blocks is sufficient for now (we process full width).
+
+Return a JSON array of regions:
 [
-  {"title": "רש\"י בראשית", "y": 0, "height": 30},
-  {"title": "תוספות", "y": 32, "height": 35},
-  {"title": "רמב\"ן", "y": 68, "height": 30}
+  {
+    "title": "Inferred Title (e.g. 'Rashi - Genesis 1:1')", 
+    "y": percentage_from_top (0-100), 
+    "height": percentage_height (0-100)
+  }
 ]
 
-IMPORTANT: 
-- Find ALL sources, there could be 2, 5, 10, or more
-- Make sure y + height values don't exceed 100
-- Leave small gaps between sources (the y of one should be slightly after y+height of previous)
-
-Return ONLY the JSON array, nothing else.`
+Return ONLY valid JSON.`
 
     try {
         const res = await fetch(
