@@ -15,8 +15,8 @@ export async function POST(request: NextRequest) {
         const base64 = Buffer.from(bytes).toString('base64')
         const mimeType = file.type.startsWith('image/') ? file.type : 'image/png'
 
-        // Try Gemini to analyze layout
-        let regions = await analyzeAndSlice(base64, mimeType)
+        // Try Gemini to find source markers
+        let regions = await findSourceMarkers(base64, mimeType)
 
         // If failed, default to one full-page source
         if (!regions || regions.length === 0) {
@@ -34,34 +34,43 @@ export async function POST(request: NextRequest) {
     }
 }
 
-async function analyzeAndSlice(base64: string, mimeType: string) {
+async function findSourceMarkers(base64: string, mimeType: string) {
     if (!GEMINI_API_KEY) {
-        console.log('No Gemini API key')
         return []
     }
 
-    // Step 1: Ask AI to COUNT sources and describe layout
-    const prompt = `Analyze this Jewish source sheet image.
+    // Super detailed prompt focusing on finding NUMBER MARKERS
+    const prompt = `You are an expert at analyzing Jewish Torah source sheet scans.
 
-COUNT the number of distinct text sources/citations on this page.
-Look for:
-- Numbered sections (1, 2, 3... or א, ב, ג...)
-- Bold headers separating sources
-- Clear visual gaps between text blocks
+CAREFUL OBSERVATION REQUIRED:
+Look at this image VERY carefully. Find EVERY distinct source citation.
+Sources are marked by:
+- Handwritten or printed NUMBERS in circles or parentheses: ①②③ or (1)(2)(3) or just 1. 2. 3.
+- Hebrew letters as markers: א׳ ב׳ ג׳
+- Bold section headers like "רש"י" or "גמרא"
+- Clear paragraph breaks with whitespace
 
-Also determine the LAYOUT:
-- Is it single column or multiple columns?
-- How many rows of sources are there?
+YOUR TASK:
+For EACH source you find, give me its bounding box coordinates.
+The coordinates are [top, left, bottom, right] as percentages 0-1000 where:
+- 0,0 is top-left corner
+- 1000,1000 is bottom-right corner
 
-Return JSON:
-{
-  "source_count": <number between 1 and 20>,
-  "columns": <1 or 2>,
-  "rows": <number of rows>,
-  "layout_description": "<brief description>"
-}
+IMPORTANT:
+- Sources may be in MULTIPLE COLUMNS (side by side)
+- Sources may be DIFFERENT SIZES
+- Count ALL sources, even small ones
+- Be VERY precise with the boundaries
 
-Be precise. Count EVERY separate source block.`
+Return a JSON array with EVERY source:
+[
+  {"label": "1", "box": [top, left, bottom, right]},
+  {"label": "2", "box": [top, left, bottom, right]},
+  ...
+]
+
+If you see 9 sources, return 9 objects.
+Return ONLY the JSON array, no other text.`
 
     try {
         const res = await fetch(
@@ -78,59 +87,45 @@ Be precise. Count EVERY separate source block.`
                             { text: prompt },
                             { inline_data: { mime_type: mimeType, data: base64 } }
                         ]
-                    }]
+                    }],
+                    generationConfig: {
+                        temperature: 0.1
+                    }
                 })
             }
         )
 
         if (!res.ok) {
-            console.error('Gemini error:', res.status, await res.text())
+            console.error('Gemini error:', res.status)
             return []
         }
 
         const data = await res.json() as any
-        let text = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}'
+        let text = data.candidates?.[0]?.content?.parts?.[0]?.text || '[]'
 
-        console.log('Gemini raw:', text)
+        console.log('Gemini response:', text.substring(0, 500))
 
+        // Clean up response
         if (text.includes('```')) {
             const match = text.match(/```(?:json)?\s*([\s\S]*?)```/)
             if (match) text = match[1]
         }
-
-        const analysis = JSON.parse(text.trim())
-        const count = Math.min(20, Math.max(1, analysis.source_count || 1))
-        const cols = analysis.columns || 1
-        const rows = analysis.rows || Math.ceil(count / cols)
-
-        console.log(`Detected: ${count} sources, ${cols} columns, ${rows} rows`)
-
-        // Step 2: Generate grid of regions based on count and layout
-        const regions: any[] = []
-        let sourceNum = 1
-
-        const colWidth = Math.floor(1000 / cols)
-        const rowHeight = Math.floor(1000 / rows)
-
-        for (let r = 0; r < rows && sourceNum <= count; r++) {
-            for (let c = 0; c < cols && sourceNum <= count; c++) {
-                const ymin = r * rowHeight
-                const ymax = (r + 1) * rowHeight
-                const xmin = c * colWidth
-                const xmax = (c + 1) * colWidth
-
-                regions.push({
-                    title: `Source ${sourceNum}`,
-                    box_2d: [ymin, xmin, ymax, xmax]
-                })
-                sourceNum++
-            }
+        text = text.trim()
+        if (!text.startsWith('[')) {
+            const arrayStart = text.indexOf('[')
+            if (arrayStart !== -1) text = text.substring(arrayStart)
         }
 
-        return regions
+        const sources = JSON.parse(text)
+
+        // Convert to our format
+        return sources.map((s: any, i: number) => ({
+            title: s.label || `Source ${i + 1}`,
+            box_2d: s.box || [0, 0, 1000, 1000]
+        }))
 
     } catch (e) {
-        console.error('Gemini error:', e)
+        console.error('Gemini parse error:', e)
         return []
     }
 }
