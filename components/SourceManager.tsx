@@ -302,45 +302,59 @@ export default function SourceManager() {
                     </div>
                 )}
 
-                {/* Paste Text Alternative */}
-                <details className="mt-4 border-t pt-4">
-                    <summary className="cursor-pointer text-sm font-medium text-primary hover:text-primary/80">
-                        📋 Or paste text directly (most reliable)
-                    </summary>
-                    <div className="mt-3 space-y-3">
-                        <p className="text-xs text-gray-500">
-                            Copy text from your source sheet and paste it below. Each paragraph becomes a separate source.
-                        </p>
-                        <textarea
-                            placeholder="Paste your source text here..."
-                            className="w-full h-48 p-3 border border-gray-300 rounded-lg font-serif text-base resize-none focus:ring-2 focus:ring-primary"
-                            dir="auto"
-                            onChange={(e) => setRawText(e.target.value)}
-                            value={rawText}
-                        />
-                        <button
-                            onClick={() => {
-                                if (rawText.trim()) {
-                                    const blocks = rawText.split(/\n{2,}/).filter(b => b.trim().length > 10)
-                                    const parsed = blocks.map(block => {
-                                        const hebrewChars = (block.match(/[\u0590-\u05FF]/g) || []).length
-                                        const total = block.length
-                                        return {
-                                            id: crypto.randomUUID(),
-                                            text: block.trim(),
-                                            type: (hebrewChars / total > 0.3 ? 'hebrew' : 'english') as 'hebrew' | 'english'
-                                        }
-                                    })
-                                    setSources(parsed)
-                                }
-                            }}
-                            disabled={!rawText.trim()}
-                            className="w-full py-2 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-colors disabled:opacity-50"
-                        >
-                            Parse Pasted Text
-                        </button>
-                    </div>
-                </details>
+                {/* Paste Text Section - More Prominent */}
+                <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <h4 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
+                        📋 Paste Text Directly (Best for Rashi Script)
+                    </h4>
+                    <p className="text-xs text-blue-700 mb-3">
+                        OCR struggles with Rashi script. For best results, copy text from your source and paste below.
+                        <br />
+                        <strong>Tip:</strong> Insert <code className="bg-blue-100 px-1 rounded">---</code> on its own line to separate sources.
+                    </p>
+                    <textarea
+                        placeholder="Paste your source text here...
+
+Use --- on a new line to separate sources. Example:
+
+רש״י על בראשית א:א
+בראשית - בשביל התורה שנקראת ראשית...
+---
+תוספות ד״ה בראשית
+מקשים התוספות על רש״י..."
+                        className="w-full h-64 p-3 border border-blue-300 rounded-lg font-serif text-base resize-none focus:ring-2 focus:ring-primary bg-white"
+                        dir="auto"
+                        onChange={(e) => setRawText(e.target.value)}
+                        value={rawText}
+                    />
+                    <button
+                        onClick={() => {
+                            if (rawText.trim()) {
+                                // Split by --- or double newlines
+                                const blocks = rawText.split(/(?:^|\n)---(?:\n|$)|\n{2,}/).filter(b => b.trim().length > 5)
+                                const parsed = blocks.map((block, i) => {
+                                    const trimmed = block.trim()
+                                    const hebrewChars = (trimmed.match(/[\u0590-\u05FF]/g) || []).length
+                                    const total = trimmed.length
+                                    const lines = trimmed.split('\n')
+                                    const firstLine = lines[0].trim()
+
+                                    return {
+                                        id: crypto.randomUUID(),
+                                        text: lines.slice(1).join('\n').trim() || trimmed,
+                                        type: (hebrewChars / total > 0.3 ? 'hebrew' : 'english') as 'hebrew' | 'english',
+                                        title: firstLine.length < 80 ? firstLine : `Source ${i + 1}`
+                                    }
+                                })
+                                setSources(parsed)
+                            }
+                        }}
+                        disabled={!rawText.trim()}
+                        className="w-full mt-3 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
+                    >
+                        Parse Text into Sources
+                    </button>
+                </div>
             </div>
 
             {/* Manual Add Section */}
