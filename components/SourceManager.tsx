@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useCallback } from 'react'
-import { Upload, Loader2, RefreshCw, X, Save, Trash2, ScanLine, Grid3X3, Grid2X2 } from 'lucide-react'
+import { useState, useCallback, useRef, useEffect } from 'react'
+import { Upload, Loader2, X, Save, Trash2, ScanLine, Grid3X3, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react'
 import ReactCrop, { PercentCrop } from 'react-image-crop'
 import 'react-image-crop/dist/ReactCrop.css'
 
@@ -12,26 +12,217 @@ interface Source {
     crop: PercentCrop
 }
 
+interface BoundingBox {
+    x: number
+    y: number
+    width: number
+    height: number
+}
+
+// ============================================
+// CORE COMPUTER VISION - TEXT BLOCK DETECTION
+// ============================================
+
+function analyzeImage(canvas: HTMLCanvasElement): BoundingBox[] {
+    const ctx = canvas.getContext('2d')!
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+    const data = imageData.data
+    const width = canvas.width
+    const height = canvas.height
+
+    // Step 1: Convert to grayscale binary image
+    const binary: boolean[][] = []
+    for (let y = 0; y < height; y++) {
+        binary[y] = []
+        for (let x = 0; x < width; x++) {
+            const idx = (y * width + x) * 4
+            const gray = (data[idx] + data[idx + 1] + data[idx + 2]) / 3
+            // Adaptive threshold: anything darker than 200 is "ink"
+            binary[y][x] = gray < 200
+        }
+    }
+
+    // Step 2: Dilate to connect nearby text (morphological dilation)
+    // This connects characters into words and words into blocks
+    const dilateRadius = Math.max(3, Math.floor(width / 150))
+    const dilated = dilate(binary, width, height, dilateRadius)
+
+    // Step 3: Find connected components using flood fill
+    const labels = new Int32Array(width * height)
+    let nextLabel = 1
+    const componentBounds: Map<number, { minX: number; maxX: number; minY: number; maxY: number; pixels: number }> = new Map()
+
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            if (dilated[y][x] && labels[y * width + x] === 0) {
+                // Flood fill this component
+                const bounds = floodFill(dilated, labels, width, height, x, y, nextLabel)
+                componentBounds.set(nextLabel, bounds)
+                nextLabel++
+            }
+        }
+    }
+
+    console.log(`Found ${componentBounds.size} raw components`)
+
+    // Step 4: Filter and merge components
+    const boxes: BoundingBox[] = []
+    const minArea = (width * height) * 0.005 // At least 0.5% of image
+    const maxArea = (width * height) * 0.95 // Not the whole page
+
+    componentBounds.forEach((bounds, label) => {
+        const w = bounds.maxX - bounds.minX
+        const h = bounds.maxY - bounds.minY
+        const area = w * h
+
+        if (area >= minArea && area <= maxArea && w > 20 && h > 20) {
+            boxes.push({
+                x: bounds.minX,
+                y: bounds.minY,
+                width: w,
+                height: h
+            })
+        }
+    })
+
+    // Step 5: Merge overlapping boxes
+    const merged = mergeOverlappingBoxes(boxes, width, height)
+
+    // Step 6: Sort by position (top to bottom, left to right)
+    merged.sort((a, b) => {
+        const rowA = Math.floor(a.y / (height / 10))
+        const rowB = Math.floor(b.y / (height / 10))
+        if (rowA !== rowB) return rowA - rowB
+        return a.x - b.x
+    })
+
+    console.log(`Final: ${merged.length} source regions`)
+    return merged
+}
+
+function dilate(binary: boolean[][], width: number, height: number, radius: number): boolean[][] {
+    const result: boolean[][] = []
+    for (let y = 0; y < height; y++) {
+        result[y] = []
+        for (let x = 0; x < width; x++) {
+            let found = false
+            for (let dy = -radius; dy <= radius && !found; dy++) {
+                for (let dx = -radius; dx <= radius && !found; dx++) {
+                    const ny = y + dy
+                    const nx = x + dx
+                    if (ny >= 0 && ny < height && nx >= 0 && nx < width) {
+                        if (binary[ny][nx]) found = true
+                    }
+                }
+            }
+            result[y][x] = found
+        }
+    }
+    return result
+}
+
+function floodFill(
+    binary: boolean[][],
+    labels: Int32Array,
+    width: number,
+    height: number,
+    startX: number,
+    startY: number,
+    label: number
+): { minX: number; maxX: number; minY: number; maxY: number; pixels: number } {
+    const stack: [number, number][] = [[startX, startY]]
+    let minX = startX, maxX = startX, minY = startY, maxY = startY
+    let pixels = 0
+
+    while (stack.length > 0) {
+        const [x, y] = stack.pop()!
+        if (x < 0 || x >= width || y < 0 || y >= height) continue
+        if (!binary[y][x] || labels[y * width + x] !== 0) continue
+
+        labels[y * width + x] = label
+        pixels++
+        minX = Math.min(minX, x)
+        maxX = Math.max(maxX, x)
+        minY = Math.min(minY, y)
+        maxY = Math.max(maxY, y)
+
+        stack.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1])
+    }
+
+    return { minX, maxX, minY, maxY, pixels }
+}
+
+function mergeOverlappingBoxes(boxes: BoundingBox[], imgWidth: number, imgHeight: number): BoundingBox[] {
+    if (boxes.length === 0) return boxes
+
+    // Merge boxes that are close together (likely same source)
+    const mergeThreshold = imgHeight * 0.02 // 2% of image height
+
+    let merged = [...boxes]
+    let changed = true
+
+    while (changed) {
+        changed = false
+        const newMerged: BoundingBox[] = []
+        const used = new Set<number>()
+
+        for (let i = 0; i < merged.length; i++) {
+            if (used.has(i)) continue
+
+            let current = { ...merged[i] }
+            used.add(i)
+
+            for (let j = i + 1; j < merged.length; j++) {
+                if (used.has(j)) continue
+
+                const other = merged[j]
+
+                // Check if boxes should be merged (overlapping or very close)
+                const overlapX = current.x < other.x + other.width + mergeThreshold &&
+                    current.x + current.width + mergeThreshold > other.x
+                const overlapY = current.y < other.y + other.height + mergeThreshold &&
+                    current.y + current.height + mergeThreshold > other.y
+
+                if (overlapX && overlapY) {
+                    // Merge the boxes
+                    const newX = Math.min(current.x, other.x)
+                    const newY = Math.min(current.y, other.y)
+                    const newRight = Math.max(current.x + current.width, other.x + other.width)
+                    const newBottom = Math.max(current.y + current.height, other.y + other.height)
+
+                    current = {
+                        x: newX,
+                        y: newY,
+                        width: newRight - newX,
+                        height: newBottom - newY
+                    }
+                    used.add(j)
+                    changed = true
+                }
+            }
+
+            newMerged.push(current)
+        }
+
+        merged = newMerged
+    }
+
+    return merged
+}
+
+// ============================================
+// MAIN COMPONENT
+// ============================================
+
 export default function SourceManager() {
     const [file, setFile] = useState<File | null>(null)
     const [isProcessing, setIsProcessing] = useState(false)
     const [sources, setSources] = useState<Source[]>([])
     const [pageImages, setPageImages] = useState<string[]>([])
-
-    // Quick Slice State
     const [sliceModePageId, setSliceModePageId] = useState<number | null>(null)
     const [hoverLineY, setHoverLineY] = useState<number | null>(null)
-
     const [editingSourceId, setEditingSourceId] = useState<string | null>(null)
-
-    const handleDrop = useCallback((e: React.DragEvent) => {
-        e.preventDefault()
-        const f = e.dataTransfer.files[0]
-        if (f) {
-            setFile(f)
-            processFile(f)
-        }
-    }, [])
+    const [sensitivity, setSensitivity] = useState(50) // For threshold adjustment
 
     const processFile = async (f: File) => {
         setIsProcessing(true)
@@ -40,47 +231,54 @@ export default function SourceManager() {
         setSliceModePageId(null)
 
         try {
-            let images: File[] = []
+            let images: HTMLImageElement[] = []
+
             if (f.type === 'application/pdf') {
                 images = await pdfToImages(f)
             } else {
-                images = [f]
+                const img = await loadImage(URL.createObjectURL(f))
+                images = [img]
             }
 
             const newPageImages: string[] = []
             const newSources: Source[] = []
 
             for (let i = 0; i < images.length; i++) {
-                const imageUrl = await fileToBase64(images[i])
-                newPageImages.push(imageUrl)
+                const img = images[i]
 
-                // Call API to find gaps and create regions
-                const formData = new FormData()
-                formData.append('file', images[i])
+                // Create canvas for analysis
+                const canvas = document.createElement('canvas')
+                canvas.width = img.naturalWidth || img.width
+                canvas.height = img.naturalHeight || img.height
+                const ctx = canvas.getContext('2d')!
+                ctx.drawImage(img, 0, 0)
 
-                try {
-                    const res = await fetch('/api/sources/parse', { method: 'POST', body: formData })
-                    const data = await res.json() as { success: boolean; regions: any[] }
+                // Store the image
+                const dataUrl = canvas.toDataURL('image/png')
+                newPageImages.push(dataUrl)
 
-                    if (data.success && data.regions) {
-                        data.regions.forEach((r: any) => {
-                            const [ymin, xmin, ymax, xmax] = r.box_2d || [0, 0, 1000, 1000]
-                            newSources.push({
-                                id: crypto.randomUUID(),
-                                title: r.title || `Source ${newSources.length + 1}`,
-                                pageIndex: i,
-                                crop: {
-                                    unit: '%',
-                                    x: xmin / 10,
-                                    y: ymin / 10,
-                                    width: (xmax - xmin) / 10,
-                                    height: (ymax - ymin) / 10
-                                }
-                            })
-                        })
-                    }
-                } catch (e) {
-                    // Fallback to full page
+                // Analyze image to find text blocks
+                console.log(`Analyzing page ${i + 1}...`)
+                const boxes = analyzeImage(canvas)
+
+                // Convert boxes to sources
+                boxes.forEach((box, idx) => {
+                    newSources.push({
+                        id: crypto.randomUUID(),
+                        title: `Source ${idx + 1}`,
+                        pageIndex: i,
+                        crop: {
+                            unit: '%',
+                            x: (box.x / canvas.width) * 100,
+                            y: (box.y / canvas.height) * 100,
+                            width: (box.width / canvas.width) * 100,
+                            height: (box.height / canvas.height) * 100
+                        }
+                    })
+                })
+
+                // Fallback if no boxes found
+                if (boxes.length === 0) {
                     newSources.push({
                         id: crypto.randomUUID(),
                         title: `Page ${i + 1}`,
@@ -94,51 +292,63 @@ export default function SourceManager() {
             setSources(newSources)
 
         } catch (e) {
-            alert('Error processing file: ' + e)
+            console.error('Processing error:', e)
+            alert('Error: ' + e)
         } finally {
             setIsProcessing(false)
         }
     }
 
-    // Quick Grid Split - divide a page into N equal parts
-    const splitPageIntoGrid = (pageIndex: number, rows: number, cols: number) => {
-        // Remove existing sources for this page
-        const otherSources = sources.filter(s => s.pageIndex !== pageIndex)
-        const newSources: Source[] = []
+    // Helpers
+    const loadImage = (src: string): Promise<HTMLImageElement> => {
+        return new Promise((resolve, reject) => {
+            const img = new Image()
+            img.onload = () => resolve(img)
+            img.onerror = reject
+            img.src = src
+        })
+    }
 
-        const cellWidth = 100 / cols
-        const cellHeight = 100 / rows
-        let num = 1
+    const pdfToImages = async (pdfFile: File): Promise<HTMLImageElement[]> => {
+        const pdfjsLib = await import('pdfjs-dist')
+        pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'
+        const pdf = await pdfjsLib.getDocument({ data: await pdfFile.arrayBuffer() }).promise
+        const images: HTMLImageElement[] = []
 
-        for (let r = 0; r < rows; r++) {
-            for (let c = 0; c < cols; c++) {
-                newSources.push({
-                    id: crypto.randomUUID(),
-                    title: `Source ${num}`,
-                    pageIndex,
-                    crop: {
-                        unit: '%',
-                        x: c * cellWidth,
-                        y: r * cellHeight,
-                        width: cellWidth,
-                        height: cellHeight
-                    }
-                })
-                num++
-            }
+        for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i)
+            const viewport = page.getViewport({ scale: 2 })
+            const canvas = document.createElement('canvas')
+            canvas.width = viewport.width
+            canvas.height = viewport.height
+            await page.render({
+                canvasContext: canvas.getContext('2d')!,
+                viewport,
+                canvas
+            } as any).promise
+
+            const img = await loadImage(canvas.toDataURL())
+            images.push(img)
         }
 
-        setSources([...otherSources, ...newSources])
+        return images
     }
+
+    const handleDrop = useCallback((e: React.DragEvent) => {
+        e.preventDefault()
+        const f = e.dataTransfer.files[0]
+        if (f) {
+            setFile(f)
+            processFile(f)
+        }
+    }, [])
 
     const onUpdateCrop = (id: string, c: PercentCrop) => {
         setSources(sources.map(s => s.id === id ? { ...s, crop: c } : s))
     }
 
-    // Slice Logic
     const handleSliceClick = (e: React.MouseEvent<HTMLDivElement>, pageIndex: number, imgElement: HTMLImageElement) => {
         if (sliceModePageId !== pageIndex) return
-
         const rect = imgElement.getBoundingClientRect()
         const clickY = e.clientY - rect.top
         const percentageY = (clickY / rect.height) * 100
@@ -152,24 +362,18 @@ export default function SourceManager() {
         if (targetSource) {
             const oldHeight = targetSource.crop.height
             const splitRelativeY = percentageY - targetSource.crop.y
-
             if (splitRelativeY < 2 || (oldHeight - splitRelativeY) < 2) return
 
             const updatedTop = {
                 ...targetSource,
                 crop: { ...targetSource.crop, height: splitRelativeY },
-                title: `Source ${sources.filter(s => s.pageIndex === pageIndex).length}`
             }
 
             const newBottom: Source = {
                 id: crypto.randomUUID(),
                 title: `Source ${sources.filter(s => s.pageIndex === pageIndex).length + 1}`,
-                pageIndex: pageIndex,
-                crop: {
-                    ...targetSource.crop,
-                    y: targetSource.crop.y + splitRelativeY,
-                    height: oldHeight - splitRelativeY
-                }
+                pageIndex,
+                crop: { ...targetSource.crop, y: targetSource.crop.y + splitRelativeY, height: oldHeight - splitRelativeY }
             }
 
             setSources(prev => {
@@ -182,199 +386,122 @@ export default function SourceManager() {
         }
     }
 
-    // Helpers
-    const pdfToImages = async (pdfFile: File): Promise<File[]> => {
-        const pdfjsLib = await import('pdfjs-dist')
-        pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'
-        const pdf = await pdfjsLib.getDocument({ data: await pdfFile.arrayBuffer() }).promise
-        const files: File[] = []
-        for (let i = 1; i <= pdf.numPages; i++) {
-            const page = await pdf.getPage(i)
-            const viewport = page.getViewport({ scale: 2 })
-            const canvas = document.createElement('canvas')
-            canvas.width = viewport.width
-            canvas.height = viewport.height
-            await page.render({ canvasContext: canvas.getContext('2d')!, viewport, canvas } as any).promise
-            const blob = await new Promise<Blob | null>(r => canvas.toBlob(r, 'image/png'))
-            if (blob) files.push(new File([blob], `page-${i}.png`, { type: 'image/png' }))
+    const splitPageIntoGrid = (pageIndex: number, rows: number, cols: number) => {
+        const otherSources = sources.filter(s => s.pageIndex !== pageIndex)
+        const newSources: Source[] = []
+        const cellWidth = 100 / cols
+        const cellHeight = 100 / rows
+        let num = 1
+        for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+                newSources.push({
+                    id: crypto.randomUUID(),
+                    title: `Source ${num}`,
+                    pageIndex,
+                    crop: { unit: '%', x: c * cellWidth, y: r * cellHeight, width: cellWidth, height: cellHeight }
+                })
+                num++
+            }
         }
-        return files
+        setSources([...otherSources, ...newSources])
     }
 
-    const fileToBase64 = (f: File) => new Promise<string>(r => {
-        const reader = new FileReader(); reader.onload = () => r(reader.result as string); reader.readAsDataURL(f)
-    })
-
     return (
-        <div className="max-w-4xl mx-auto p-6 font-sans text-sm">
+        <div className="max-w-5xl mx-auto p-4 font-sans text-sm">
             {/* Header */}
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center justify-between mb-4">
                 <div>
-                    <h1 className="text-xl font-bold text-gray-900">Source Extraction</h1>
-                    <p className="text-gray-500 text-xs mt-1">Click to slice • Grid buttons for quick split</p>
+                    <h1 className="text-xl font-bold text-gray-900">Source Extractor</h1>
+                    <p className="text-gray-500 text-xs">Computer Vision • Auto-detects text blocks</p>
                 </div>
-
                 {file && (
-                    <div className="flex gap-2">
-                        <button
-                            onClick={() => { setFile(null); setSources([]); setPageImages([]); }}
-                            className="px-3 py-1.5 text-red-600 hover:bg-red-50 rounded text-xs font-medium"
-                        >
-                            Reset
-                        </button>
-                    </div>
+                    <button onClick={() => processFile(file)} className="px-3 py-1.5 bg-blue-600 text-white rounded text-xs font-medium flex items-center gap-1">
+                        <RotateCcw className="w-3 h-3" /> Re-analyze
+                    </button>
                 )}
             </div>
 
-            {/* Empty State */}
+            {/* Upload */}
             {!file && (
                 <div
                     onDrop={handleDrop}
                     onDragOver={e => e.preventDefault()}
                     onClick={() => document.getElementById('uploader')?.click()}
-                    className="border-2 border-dashed border-gray-200 rounded-xl p-10 flex flex-col items-center justify-center cursor-pointer hover:border-blue-500 hover:bg-blue-50/50 transition-all group"
+                    className="border-2 border-dashed border-gray-300 rounded-xl p-12 flex flex-col items-center justify-center cursor-pointer hover:border-blue-500 hover:bg-blue-50/50 transition-all"
                 >
-                    <div className="bg-blue-50 p-3 rounded-full mb-3 group-hover:scale-110 transition-transform">
-                        <Upload className="w-6 h-6 text-blue-600" />
-                    </div>
-                    <h3 className="text-base font-semibold text-gray-900">Upload Source Sheet</h3>
-                    <p className="text-gray-400 text-xs mt-1">PDFs or Images • You'll slice it manually</p>
+                    <Upload className="w-8 h-8 text-blue-600 mb-3" />
+                    <h3 className="text-base font-semibold">Upload Source Sheet</h3>
+                    <p className="text-gray-400 text-xs mt-1">PDF or Image</p>
                     <input
-                        id="uploader"
-                        type="file"
-                        className="hidden"
-                        accept=".pdf,image/*"
-                        onChange={e => {
-                            const f = e.target.files?.[0]
-                            if (f) {
-                                setFile(f)
-                                processFile(f)
-                            }
-                        }}
+                        id="uploader" type="file" className="hidden" accept=".pdf,image/*"
+                        onChange={e => { const f = e.target.files?.[0]; if (f) { setFile(f); processFile(f); } }}
                     />
                 </div>
             )}
 
             {/* Processing */}
             {isProcessing && (
-                <div className="text-center py-12 animate-pulse">
-                    <Loader2 className="w-8 h-8 text-blue-600 animate-spin mx-auto mb-3" />
-                    <p className="text-gray-500 font-medium text-xs">Loading pages...</p>
+                <div className="text-center py-16">
+                    <Loader2 className="w-10 h-10 text-blue-600 animate-spin mx-auto mb-3" />
+                    <p className="text-gray-600 font-medium">Analyzing image structure...</p>
+                    <p className="text-gray-400 text-xs mt-1">Finding text blocks using computer vision</p>
                 </div>
             )}
 
             {/* Results */}
             {!isProcessing && pageImages.length > 0 && (
-                <div className="space-y-8 relative z-0">
+                <div className="space-y-6">
                     {pageImages.map((img, pageIdx) => (
-                        <div key={pageIdx} className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden relative">
+                        <div key={pageIdx} className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
                             {/* Toolbar */}
-                            <div className="bg-gray-50 px-3 py-2 border-b flex justify-between items-center sticky top-0 z-20">
+                            <div className="bg-gray-50 px-3 py-2 border-b flex justify-between items-center">
                                 <div className="flex items-center gap-3">
-                                    <span className="font-semibold text-gray-700 text-xs">Page {pageIdx + 1}</span>
-                                    <span className="text-[10px] text-gray-400">{sources.filter(s => s.pageIndex === pageIdx).length} sources</span>
+                                    <span className="font-bold text-gray-700 text-xs">Page {pageIdx + 1}</span>
+                                    <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">
+                                        {sources.filter(s => s.pageIndex === pageIdx).length} sources found
+                                    </span>
                                 </div>
-
-                                <div className="flex items-center gap-2">
-                                    {/* Quick Grid Buttons */}
-                                    <div className="flex gap-1 mr-2">
-                                        <button
-                                            onClick={() => splitPageIntoGrid(pageIdx, 2, 1)}
-                                            className="px-2 py-1 text-[10px] bg-gray-200 hover:bg-gray-300 rounded font-medium"
-                                            title="Split into 2 rows"
-                                        >
-                                            2
-                                        </button>
-                                        <button
-                                            onClick={() => splitPageIntoGrid(pageIdx, 3, 1)}
-                                            className="px-2 py-1 text-[10px] bg-gray-200 hover:bg-gray-300 rounded font-medium"
-                                            title="Split into 3 rows"
-                                        >
-                                            3
-                                        </button>
-                                        <button
-                                            onClick={() => splitPageIntoGrid(pageIdx, 4, 1)}
-                                            className="px-2 py-1 text-[10px] bg-gray-200 hover:bg-gray-300 rounded font-medium"
-                                            title="Split into 4 rows"
-                                        >
-                                            4
-                                        </button>
-                                        <button
-                                            onClick={() => splitPageIntoGrid(pageIdx, 3, 2)}
-                                            className="px-2 py-1 text-[10px] bg-blue-100 hover:bg-blue-200 text-blue-700 rounded font-medium flex items-center gap-1"
-                                            title="Split into 3x2 grid (6)"
-                                        >
-                                            <Grid2X2 className="w-3 h-3" /> 6
-                                        </button>
-                                        <button
-                                            onClick={() => splitPageIntoGrid(pageIdx, 3, 3)}
-                                            className="px-2 py-1 text-[10px] bg-blue-100 hover:bg-blue-200 text-blue-700 rounded font-medium flex items-center gap-1"
-                                            title="Split into 3x3 grid (9)"
-                                        >
-                                            <Grid3X3 className="w-3 h-3" /> 9
-                                        </button>
-                                    </div>
-
-                                    {/* Slice Mode Toggle */}
+                                <div className="flex items-center gap-1">
+                                    {[2, 3, 4, 6, 9].map(n => (
+                                        <button key={n} onClick={() => splitPageIntoGrid(pageIdx, n <= 4 ? n : 3, n <= 4 ? 1 : n / 3)}
+                                            className="w-6 h-6 text-[10px] bg-gray-200 hover:bg-gray-300 rounded font-bold">{n}</button>
+                                    ))}
                                     <button
                                         onClick={() => setSliceModePageId(sliceModePageId === pageIdx ? null : pageIdx)}
-                                        className={`flex items-center gap-1.5 px-3 py-1 text-xs font-bold rounded-full transition-all ${sliceModePageId === pageIdx ? 'bg-red-600 text-white shadow-inner' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+                                        className={`ml-2 flex items-center gap-1 px-2 py-1 text-xs font-bold rounded ${sliceModePageId === pageIdx ? 'bg-red-600 text-white' : 'bg-gray-200 hover:bg-gray-300'}`}
                                     >
-                                        <ScanLine className="w-3 h-3" /> {sliceModePageId === pageIdx ? 'Done' : 'Slice'}
+                                        <ScanLine className="w-3 h-3" /> Slice
                                     </button>
                                 </div>
                             </div>
 
+                            {/* Image with overlays */}
                             <div
-                                className={`relative select-none ${sliceModePageId === pageIdx ? 'cursor-crosshair' : ''}`}
-                                onMouseMove={(e) => {
-                                    if (sliceModePageId === pageIdx) {
-                                        const rect = e.currentTarget.getBoundingClientRect()
-                                        setHoverLineY(e.clientY - rect.top)
-                                    }
-                                }}
+                                className={`relative ${sliceModePageId === pageIdx ? 'cursor-crosshair' : ''}`}
+                                onMouseMove={e => sliceModePageId === pageIdx && setHoverLineY(e.clientY - e.currentTarget.getBoundingClientRect().top)}
                                 onMouseLeave={() => setHoverLineY(null)}
-                                onClick={(e) => sliceModePageId === pageIdx && handleSliceClick(e, pageIdx, e.currentTarget.querySelector('img')!)}
+                                onClick={e => sliceModePageId === pageIdx && handleSliceClick(e, pageIdx, e.currentTarget.querySelector('img')!)}
                             >
-                                <img src={img} className="w-full block pointer-events-none" />
+                                <img src={img} className="w-full block" />
 
-                                {/* Slice Line */}
                                 {sliceModePageId === pageIdx && hoverLineY !== null && (
-                                    <div
-                                        className="absolute w-full h-0.5 bg-red-500 z-50 pointer-events-none shadow-lg"
-                                        style={{ top: hoverLineY }}
-                                    >
-                                        <div className="absolute right-2 -top-6 bg-red-600 text-white text-[9px] px-2 py-0.5 rounded shadow-sm">Click to cut here</div>
+                                    <div className="absolute w-full h-0.5 bg-red-500 z-50 pointer-events-none" style={{ top: hoverLineY }}>
+                                        <div className="absolute right-2 -top-5 bg-red-600 text-white text-[9px] px-2 py-0.5 rounded">Click to cut</div>
                                     </div>
                                 )}
 
-                                {/* Source Overlays */}
                                 {sources.filter(s => s.pageIndex === pageIdx).map((source, idx) => (
-                                    <div
-                                        key={source.id}
-                                        className="absolute group z-10"
-                                        style={{
-                                            left: `${source.crop.x}%`,
-                                            top: `${source.crop.y}%`,
-                                            width: `${source.crop.width}%`,
-                                            height: `${source.crop.height}%`,
-                                        }}
-                                    >
+                                    <div key={source.id} className="absolute group" style={{
+                                        left: `${source.crop.x}%`, top: `${source.crop.y}%`,
+                                        width: `${source.crop.width}%`, height: `${source.crop.height}%`,
+                                    }}>
                                         <div
-                                            className={`w-full h-full border-2 box-border transition-all ${sliceModePageId === pageIdx
-                                                ? 'border-red-400 border-dashed bg-red-500/5'
-                                                : 'border-blue-400 bg-blue-500/5 hover:bg-blue-500/10 cursor-pointer'
-                                                }`}
-                                            onClick={(e) => {
-                                                if (sliceModePageId !== pageIdx) {
-                                                    e.stopPropagation()
-                                                    setEditingSourceId(source.id)
-                                                }
-                                            }}
+                                            className={`w-full h-full border-2 ${sliceModePageId === pageIdx ? 'border-red-400 border-dashed' : 'border-blue-500 hover:border-blue-600'} bg-blue-500/5 hover:bg-blue-500/10 cursor-pointer`}
+                                            onClick={e => { if (sliceModePageId !== pageIdx) { e.stopPropagation(); setEditingSourceId(source.id); } }}
                                         >
-                                            <div className={`absolute top-1 left-1 text-white text-[10px] px-1.5 py-0.5 rounded shadow-sm font-bold ${sliceModePageId === pageIdx ? 'bg-red-600' : 'bg-blue-600'}`}>
+                                            <span className={`absolute top-1 left-1 ${sliceModePageId === pageIdx ? 'bg-red-600' : 'bg-blue-600'} text-white text-[10px] px-1.5 py-0.5 rounded font-bold`}>
                                                 {idx + 1}
-                                            </div>
+                                            </span>
                                         </div>
                                     </div>
                                 ))}
@@ -382,10 +509,10 @@ export default function SourceManager() {
                         </div>
                     ))}
 
-                    {/* Save Button */}
-                    <div className="flex justify-center pt-4 pb-12 sticky bottom-0 pointer-events-none">
-                        <button className="pointer-events-auto px-6 py-2 bg-blue-600 text-white text-sm font-bold rounded-full shadow-lg hover:bg-blue-700 hover:scale-105 transition-all flex items-center gap-2">
-                            <Save className="w-4 h-4" /> Save All ({sources.length} sources)
+                    {/* Save */}
+                    <div className="flex justify-center py-6">
+                        <button className="px-6 py-2.5 bg-blue-600 text-white font-bold rounded-full shadow-lg hover:bg-blue-700 flex items-center gap-2">
+                            <Save className="w-4 h-4" /> Save {sources.length} Sources
                         </button>
                     </div>
 
@@ -393,42 +520,22 @@ export default function SourceManager() {
                     {editingSourceId && !sliceModePageId && (() => {
                         const source = sources.find(s => s.id === editingSourceId)
                         if (!source) return null
-                        const img = pageImages[source.pageIndex]
-
                         return (
-                            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-                                <div className="bg-white rounded-xl w-full max-w-3xl h-[85vh] flex flex-col overflow-hidden shadow-2xl">
-                                    <div className="p-3 border-b flex justify-between items-center bg-gray-50">
-                                        <span className="font-bold text-sm">Adjust Source</span>
-                                        <button onClick={() => setEditingSourceId(null)} className="p-1.5 hover:bg-gray-200 rounded-full"><X className="w-4 h-4" /></button>
+                            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
+                                <div className="bg-white rounded-xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
+                                    <div className="p-3 border-b flex justify-between items-center">
+                                        <span className="font-bold">Adjust Source {sources.indexOf(source) + 1}</span>
+                                        <button onClick={() => setEditingSourceId(null)} className="p-1 hover:bg-gray-200 rounded"><X className="w-4 h-4" /></button>
                                     </div>
-
-                                    <div className="flex-1 overflow-auto bg-gray-100 p-4 flex justify-center">
-                                        <ReactCrop
-                                            crop={source.crop}
-                                            onChange={(_, p) => onUpdateCrop(source.id, p)}
-                                            className="shadow-sm bg-white"
-                                        >
-                                            <img src={img} className="max-h-[60vh] object-contain block" />
+                                    <div className="flex-1 overflow-auto p-4 bg-gray-100 flex justify-center">
+                                        <ReactCrop crop={source.crop} onChange={(_, p) => onUpdateCrop(source.id, p)} className="shadow bg-white">
+                                            <img src={pageImages[source.pageIndex]} className="max-h-[65vh]" />
                                         </ReactCrop>
                                     </div>
-
-                                    <div className="p-3 border-t bg-gray-50 flex justify-between gap-3 text-xs">
-                                        <button
-                                            onClick={() => {
-                                                setSources(sources.filter(s => s.id !== editingSourceId))
-                                                setEditingSourceId(null)
-                                            }}
-                                            className="text-red-600 hover:bg-red-50 px-3 py-1.5 rounded font-medium flex items-center gap-1.5"
-                                        >
-                                            <Trash2 className="w-3 h-3" /> Delete
-                                        </button>
-                                        <button
-                                            onClick={() => setEditingSourceId(null)}
-                                            className="bg-blue-600 text-white px-6 py-1.5 rounded font-bold hover:bg-blue-700 shadow-sm"
-                                        >
-                                            Done
-                                        </button>
+                                    <div className="p-3 border-t flex justify-between">
+                                        <button onClick={() => { setSources(sources.filter(s => s.id !== editingSourceId)); setEditingSourceId(null); }}
+                                            className="text-red-600 px-3 py-1.5 rounded flex items-center gap-1 text-xs"><Trash2 className="w-3 h-3" /> Delete</button>
+                                        <button onClick={() => setEditingSourceId(null)} className="bg-blue-600 text-white px-4 py-1.5 rounded font-bold text-xs">Done</button>
                                     </div>
                                 </div>
                             </div>
