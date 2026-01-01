@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-const GOOGLE_VISION_API_KEY = process.env.GOOGLE_VISION_API_KEY || 'AIzaSyAXKKKN7H5WmZjQXipg7ghBQHkIxhVyWN0'
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.GOOGLE_VISION_API_KEY // Can use same Google Cloud key
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'AIzaSyBUxKm7aHk1erGj3CPL-Xab8UXSZAWe5IU'
+const GOOGLE_VISION_API_KEY = process.env.GOOGLE_VISION_API_KEY || 'AIzaSyAXKKKN7H5WmZjQXipg7ghBQHkIxhVyWN0' // Kept for fallback
 
 export async function POST(request: NextRequest) {
     try {
@@ -15,42 +15,123 @@ export async function POST(request: NextRequest) {
         console.log('Processing file:', file.name, 'Type:', file.type, 'Size:', file.size)
 
         const bytes = await file.arrayBuffer()
-        const buffer = Buffer.from(bytes)
+        const base64Image = Buffer.from(bytes).toString('base64')
 
-        console.log('Step 1: OCR with Google Vision...')
-        const rawText = await ocrWithGoogleVision(buffer, file.type)
-        console.log('Extracted text length:', rawText.length)
+        // Determine mime type
+        let mimeType = file.type
+        if (mimeType === 'application/pdf') {
+            // For PDFs, we need the client to send us images instead
+            return NextResponse.json({
+                error: 'Please upload images (PNG/JPG). PDFs are converted to images on the client side.',
+                needsConversion: true
+            }, { status: 400 })
+        }
 
-        if (rawText.length < 20) {
+        console.log('Using Gemini Vision to read and parse source sheet...')
+
+        // Send image directly to Gemini Vision for OCR + Parsing in one step
+        const sources = await parseImageWithGemini(base64Image, mimeType)
+
+        if (!sources || sources.length === 0) {
             return NextResponse.json({
                 success: true,
-                rawText,
+                rawText: '[Gemini could not extract sources from this image]',
                 sources: [],
-                method: 'google_vision',
-                note: 'OCR extracted minimal text. Try a clearer image.'
+                method: 'gemini_vision',
+                note: 'Could not identify sources. Try a clearer image or different file.'
             })
         }
 
-        console.log('Step 2: AI-powered source parsing with Gemini...')
-        let sources = await parseWithGemini(rawText)
-
-        // Fallback to regex parsing if Gemini fails
-        if (!sources || sources.length === 0) {
-            console.log('Gemini parsing failed, falling back to regex...')
-            sources = parseSourcesFromText(rawText)
-        }
+        // Combine all source texts for rawText display
+        const rawText = sources.map(s => `${s.title || 'Source'}\n${s.text}`).join('\n\n---\n\n')
 
         return NextResponse.json({
             success: true,
             rawText,
             sources,
-            method: 'google_vision_gemini'
+            method: 'gemini_vision'
         })
     } catch (error) {
         console.error('Processing error:', error)
         return NextResponse.json({
             error: 'Failed to process file: ' + (error as Error).message
         }, { status: 500 })
+    }
+}
+
+// Use Gemini Vision to read image AND parse sources in one step
+async function parseImageWithGemini(base64Image: string, mimeType: string): Promise<Array<{ id: string; text: string; type: string; title?: string }>> {
+    try {
+        const prompt = `You are an expert in Jewish religious texts and can read Hebrew, Aramaic, and Rashi script perfectly.
+
+Look at this image of a source sheet. Extract EVERY individual source you see.
+
+For each source, provide:
+1. title: The source reference exactly as written (e.g., "רש"י על בראשית א:א", "גמרא ברכות ב.", "רמב"ם הל' תשובה")
+2. text: The COMPLETE text content of that source - copy it exactly as you see it
+3. type: "hebrew" if Hebrew/Aramaic, "english" if English
+
+IMPORTANT: 
+- Include ALL sources, even if there are 10, 20, or 40 sources
+- Copy the text EXACTLY as it appears, including nikud if present
+- If a source has no clear title/reference, describe what it is (e.g., "פירוש על הפסוק")
+
+Return ONLY a valid JSON array, no other text:
+[{"title": "...", "text": "...", "type": "hebrew"}, ...]`
+
+        const response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [
+                            { text: prompt },
+                            {
+                                inline_data: {
+                                    mime_type: mimeType,
+                                    data: base64Image
+                                }
+                            }
+                        ]
+                    }],
+                    generationConfig: {
+                        temperature: 0.1,
+                        maxOutputTokens: 8000
+                    }
+                })
+            }
+        )
+
+        if (!response.ok) {
+            const errText = await response.text()
+            console.error('Gemini API error:', response.status, errText)
+            return []
+        }
+
+        const data = await response.json() as any
+        const content = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+
+        console.log('Gemini response length:', content.length)
+
+        // Extract JSON from response
+        let jsonStr = content.trim()
+        if (jsonStr.startsWith('```')) {
+            jsonStr = jsonStr.replace(/```json?\n?/g, '').replace(/```/g, '').trim()
+        }
+
+        const parsed = JSON.parse(jsonStr)
+
+        return parsed.map((s: any) => ({
+            id: crypto.randomUUID(),
+            title: s.title || 'Source',
+            text: s.text || '',
+            type: s.type || 'hebrew'
+        }))
+    } catch (e) {
+        console.error('Gemini Vision parsing error:', e)
+        return []
     }
 }
 
