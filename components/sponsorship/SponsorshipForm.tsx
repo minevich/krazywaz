@@ -210,14 +210,16 @@ export default function SponsorshipForm() {
                         </div>
 
                         <div className="bg-gray-50 p-4 rounded-xl">
-                            <label className="font-bold text-sm mb-3 block">Requested Date</label>
+                            <label className="font-bold text-sm mb-3 block">
+                                {selectedId === 1 || selectedId === 3 ? 'Requested Month' : 'Requested Date'}
+                            </label>
 
                             {/* Toggle buttons for Date vs Next Available */}
                             <div className="flex gap-2 mb-3">
                                 <button type="button" onClick={() => setIsNextShiur(false)}
                                     className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all border-2
                                         ${!isNextShiur ? 'bg-primary border-primary text-white' : 'bg-white border-gray-200 text-gray-600 hover:border-primary/50'}`}>
-                                    📅 Choose Date
+                                    📅 {selectedId === 1 || selectedId === 3 ? 'Choose Month' : 'Choose Date'}
                                 </button>
                                 <button type="button" onClick={() => { setIsNextShiur(true); setDate('') }}
                                     className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all border-2
@@ -227,8 +229,33 @@ export default function SponsorshipForm() {
                             </div>
 
                             {!isNextShiur ? (
-                                <input type="date" value={date} onChange={e => setDate(e.target.value)} min={new Date().toISOString().split('T')[0]}
-                                    className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-primary outline-none" />
+                                selectedId === 1 || selectedId === 3 ? (
+                                    // Hebrew month dropdown for monthly/website sponsorships
+                                    <select
+                                        value={date}
+                                        onChange={e => setDate(e.target.value)}
+                                        className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-primary outline-none bg-white text-gray-900"
+                                    >
+                                        <option value="">Select a Hebrew month...</option>
+                                        <option value="Tishrei">תשרי / Tishrei</option>
+                                        <option value="Cheshvan">חשון / Cheshvan</option>
+                                        <option value="Kislev">כסלו / Kislev</option>
+                                        <option value="Teves">טבת / Teves</option>
+                                        <option value="Shevat">שבט / Shevat</option>
+                                        <option value="Adar">אדר / Adar</option>
+                                        <option value="Adar II">אדר ב' / Adar II</option>
+                                        <option value="Nissan">ניסן / Nissan</option>
+                                        <option value="Iyar">אייר / Iyar</option>
+                                        <option value="Sivan">סיון / Sivan</option>
+                                        <option value="Tammuz">תמוז / Tammuz</option>
+                                        <option value="Av">אב / Av</option>
+                                        <option value="Elul">אלול / Elul</option>
+                                    </select>
+                                ) : (
+                                    // Date picker for shiur sponsorships
+                                    <input type="date" value={date} onChange={e => setDate(e.target.value)} min={new Date().toISOString().split('T')[0]}
+                                        className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-primary outline-none" />
+                                )
                             ) : (
                                 <div className="p-3 bg-primary/10 rounded-lg text-primary font-medium text-sm text-center">
                                     {selectedId === 1 || selectedId === 3
