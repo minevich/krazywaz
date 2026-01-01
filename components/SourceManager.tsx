@@ -68,7 +68,7 @@ export default function SourceManager() {
             throw new Error(`Service returned ${res.status}`)
         }
 
-        const data = await res.json()
+        const data = await res.json() as { count: number; regions: any[] }
         addLog(`Python found ${data.count} regions`)
 
         if (!data.regions || data.regions.length === 0) {
@@ -99,48 +99,89 @@ export default function SourceManager() {
             // Check Python service
             const serviceOnline = await checkService()
 
-            let images: { dataUrl: string; file: File }[] = []
-
-            if (f.type === 'application/pdf') {
-                addLog('Converting PDF to images...')
-                images = await pdfToImages(f)
-                addLog(`Converted ${images.length} pages`)
-            } else {
-                const dataUrl = await fileToDataUrl(f)
-                images = [{ dataUrl, file: f }]
+            if (!serviceOnline) {
+                addLog('Python service is offline!')
+                alert('Python service is not running. Please start it with: python python-service/server.py')
+                setIsProcessing(false)
+                return
             }
+
+            addLog(`Sending ${f.name} to Python service...`)
+
+            const formData = new FormData()
+            formData.append('file', f)
+
+            const res = await fetch(`${PYTHON_SERVICE_URL}/analyze`, {
+                method: 'POST',
+                body: formData,
+                mode: 'cors'
+            })
+
+            if (!res.ok) {
+                throw new Error(`Service returned ${res.status}`)
+            }
+
+            const data = await res.json() as any
+            addLog(`Response received: ${data.isPDF ? 'PDF' : 'Image'}`)
 
             const newPageImages: string[] = []
             const newSources: Source[] = []
 
-            for (let i = 0; i < images.length; i++) {
-                const { dataUrl, file: imgFile } = images[i]
-                newPageImages.push(dataUrl)
-                addLog(`Processing page ${i + 1}...`)
+            if (data.isPDF && data.pages) {
+                // Handle multi-page PDF response
+                addLog(`Processing ${data.totalPages} pages...`)
 
-                let pageSources: Source[] = []
+                for (let i = 0; i < data.pages.length; i++) {
+                    const page = data.pages[i]
+                    newPageImages.push(page.image)
 
-                if (serviceOnline) {
-                    try {
-                        pageSources = await analyzeWithPython(imgFile)
-                        pageSources.forEach(s => { s.pageIndex = i })
-                    } catch (e) {
-                        addLog(`Python analysis failed: ${e}`)
-                        pageSources = []
+                    if (page.regions && page.regions.length > 0) {
+                        page.regions.forEach((r: any, idx: number) => {
+                            const [ymin, xmin, ymax, xmax] = r.box_2d
+                            newSources.push({
+                                id: crypto.randomUUID(),
+                                pageIndex: i,
+                                x: xmin / 10,
+                                y: ymin / 10,
+                                width: (xmax - xmin) / 10,
+                                height: (ymax - ymin) / 10
+                            })
+                        })
+                        addLog(`Page ${i + 1}: Found ${page.regions.length} sources`)
+                    } else {
+                        newSources.push({
+                            id: crypto.randomUUID(),
+                            pageIndex: i,
+                            x: 0, y: 0, width: 100, height: 100
+                        })
+                        addLog(`Page ${i + 1}: No sources found, using full page`)
                     }
                 }
+            } else {
+                // Single image response
+                newPageImages.push(data.image)
 
-                // Fallback if Python didn't work
-                if (pageSources.length === 0) {
-                    addLog('Using full-page fallback - draw boxes manually')
-                    pageSources = [{
+                if (data.regions && data.regions.length > 0) {
+                    data.regions.forEach((r: any) => {
+                        const [ymin, xmin, ymax, xmax] = r.box_2d
+                        newSources.push({
+                            id: crypto.randomUUID(),
+                            pageIndex: 0,
+                            x: xmin / 10,
+                            y: ymin / 10,
+                            width: (xmax - xmin) / 10,
+                            height: (ymax - ymin) / 10
+                        })
+                    })
+                    addLog(`Found ${data.regions.length} sources`)
+                } else {
+                    newSources.push({
                         id: crypto.randomUUID(),
-                        pageIndex: i,
+                        pageIndex: 0,
                         x: 0, y: 0, width: 100, height: 100
-                    }]
+                    })
+                    addLog('No sources found, using full page')
                 }
-
-                newSources.push(...pageSources)
             }
 
             setPageImages(newPageImages)
@@ -157,9 +198,17 @@ export default function SourceManager() {
     }
 
     const pdfToImages = async (pdfFile: File): Promise<{ dataUrl: string; file: File }[]> => {
-        const pdfjsLib = await import('pdfjs-dist')
-        pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'
-        const pdf = await pdfjsLib.getDocument({ data: await pdfFile.arrayBuffer() }).promise
+        // Dynamic import with proper destructuring
+        const pdfjs = await import('pdfjs-dist')
+        const pdfjsLib = pdfjs.default || pdfjs
+
+        // Set worker
+        if (pdfjsLib.GlobalWorkerOptions) {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'
+        }
+
+        const arrayBuffer = await pdfFile.arrayBuffer()
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
         const results: { dataUrl: string; file: File }[] = []
 
         for (let i = 1; i <= pdf.numPages; i++) {
@@ -168,7 +217,13 @@ export default function SourceManager() {
             const canvas = document.createElement('canvas')
             canvas.width = viewport.width
             canvas.height = viewport.height
-            await page.render({ canvasContext: canvas.getContext('2d')!, viewport, canvas } as any).promise
+            const ctx = canvas.getContext('2d')!
+
+            await page.render({
+                canvasContext: ctx,
+                viewport,
+                canvas
+            } as any).promise
 
             const dataUrl = canvas.toDataURL('image/png')
             const blob = await new Promise<Blob>((r) => canvas.toBlob(b => r(b!), 'image/png'))
@@ -272,8 +327,8 @@ export default function SourceManager() {
 
                     {/* Service Status */}
                     <div className={`flex items-center gap-1.5 text-xs px-2 py-1 rounded-full ${serviceStatus === 'online' ? 'bg-green-100 text-green-700' :
-                            serviceStatus === 'offline' ? 'bg-red-100 text-red-700' :
-                                'bg-gray-100 text-gray-500'
+                        serviceStatus === 'offline' ? 'bg-red-100 text-red-700' :
+                            'bg-gray-100 text-gray-500'
                         }`}>
                         <Server className="w-3 h-3" />
                         {serviceStatus === 'online' ? 'Python Online' :
@@ -356,7 +411,15 @@ export default function SourceManager() {
                                 <p className="text-gray-400 text-sm mt-1">PDF or Image file</p>
                                 <p className="text-gray-300 text-xs mt-3">Python service auto-detects sources</p>
                                 <input id="uploader" type="file" className="hidden" accept=".pdf,image/*"
-                                    onChange={e => { const f = e.target.files?.[0]; if (f) { setFile(f); processFile(f); } }} />
+                                    onChange={e => {
+                                        console.log('File selected:', e.target.files?.[0]?.name);
+                                        const f = e.target.files?.[0];
+                                        if (f) {
+                                            console.log('Processing file:', f.name, f.type);
+                                            setFile(f);
+                                            processFile(f);
+                                        }
+                                    }} />
                             </div>
                         </div>
                     )}
@@ -376,7 +439,7 @@ export default function SourceManager() {
                     {!isProcessing && pageImages.length > 0 && (
                         <div
                             className={`relative inline-block max-w-full ${activeTool === 'draw' ? 'cursor-crosshair' :
-                                    activeTool === 'slice' ? 'cursor-row-resize' : 'cursor-default'
+                                activeTool === 'slice' ? 'cursor-row-resize' : 'cursor-default'
                                 }`}
                             onMouseDown={handleMouseDown}
                             onMouseMove={handleMouseMove}
@@ -394,8 +457,8 @@ export default function SourceManager() {
                                 <div
                                     key={source.id}
                                     className={`absolute border-2 ${selectedSource === source.id
-                                            ? 'border-green-500 bg-green-500/10'
-                                            : 'border-blue-500 bg-blue-500/5 hover:bg-blue-500/10'
+                                        ? 'border-green-500 bg-green-500/10'
+                                        : 'border-blue-500 bg-blue-500/5 hover:bg-blue-500/10'
                                         } transition-colors group`}
                                     style={{
                                         left: `${source.x}%`,
