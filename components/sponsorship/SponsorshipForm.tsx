@@ -111,6 +111,7 @@ export default function SponsorshipForm() {
     const [lastName, setLastName] = useState('')
     const [email, setEmail] = useState('')
     const [message, setMessage] = useState('')
+    const [otherDedication, setOtherDedication] = useState('')
     const [errors, setErrors] = useState<Record<string, string>>({})
     const [submitted, setSubmitted] = useState(false)
 
@@ -172,7 +173,11 @@ export default function SponsorshipForm() {
                     ${selectedId === op.id ? 'bg-primary/5 border-primary shadow-md scale-[1.02]' : 'border-gray-100 hover:border-primary/50'}`}>
                                     <div className="flex justify-between items-start mb-2">
                                         <span className="font-bold text-xl text-primary">
-                                            {op.id === 6 ? '💝' : `$${op.amount.toLocaleString()}`}
+                                            {op.id === 6 ? (
+                                                <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                </svg>
+                                            ) : `$${op.amount.toLocaleString()}`}
                                         </span>
                                         <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center
                       ${selectedId === op.id ? 'border-primary bg-primary' : 'border-gray-300'}`}>
@@ -205,21 +210,29 @@ export default function SponsorshipForm() {
                         </div>
 
                         <div className="bg-gray-50 p-4 rounded-xl">
-                            <div className="flex justify-between items-center mb-3">
-                                <label className="font-bold text-sm">Requested Date</label>
-                                {(selectedId === 2 || selectedId === 4) && (
-                                    <button type="button" onClick={() => { setIsNextShiur(!isNextShiur); if (!isNextShiur) setDate('') }}
-                                        className={`px-3 py-1 rounded-full text-xs font-bold transition-all border-2
-                      ${isNextShiur ? 'bg-primary border-primary text-white' : 'bg-white border-primary/30 text-primary'}`}>
-                                        {isNextShiur ? '✓ Next Available' : 'Next Shiur'}
-                                    </button>
-                                )}
+                            <label className="font-bold text-sm mb-3 block">Requested Date</label>
+
+                            {/* Toggle buttons for Date vs Next Available */}
+                            <div className="flex gap-2 mb-3">
+                                <button type="button" onClick={() => setIsNextShiur(false)}
+                                    className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all border-2
+                                        ${!isNextShiur ? 'bg-primary border-primary text-white' : 'bg-white border-gray-200 text-gray-600 hover:border-primary/50'}`}>
+                                    📅 Choose Date
+                                </button>
+                                <button type="button" onClick={() => { setIsNextShiur(true); setDate('') }}
+                                    className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all border-2
+                                        ${isNextShiur ? 'bg-primary border-primary text-white' : 'bg-white border-gray-200 text-gray-600 hover:border-primary/50'}`}>
+                                    ⏭️ Next Available
+                                </button>
                             </div>
+
                             {!isNextShiur ? (
                                 <input type="date" value={date} onChange={e => setDate(e.target.value)} min={new Date().toISOString().split('T')[0]}
                                     className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-primary outline-none" />
                             ) : (
-                                <div className="p-3 bg-primary/10 rounded-lg text-primary font-medium text-sm">📅 Assigning to next available slot</div>
+                                <div className="p-3 bg-primary/10 rounded-lg text-primary font-medium text-sm text-center">
+                                    Your sponsorship will be assigned to the next available shiur
+                                </div>
                             )}
                             {errors.date && <p className="text-red-500 text-sm mt-2">{errors.date}</p>}
                         </div>
@@ -244,6 +257,20 @@ export default function SponsorshipForm() {
                                 <input type="text" value={dedicationName} onChange={e => setDedicationName(e.target.value)} placeholder="Enter full name..."
                                     className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-primary outline-none" />
                                 {errors.ded && <p className="text-red-500 text-sm mt-1">{errors.ded}</p>}
+                            </div>
+                        )}
+
+                        {/* Text box for Other/No Dedication */}
+                        {type === SponsorshipType.Other && (
+                            <div className="bg-gray-50 p-4 rounded-xl">
+                                <label className="font-bold text-sm mb-2 block">Custom Dedication Text (Optional)</label>
+                                <textarea
+                                    value={otherDedication}
+                                    onChange={e => setOtherDedication(e.target.value)}
+                                    placeholder="Enter your custom dedication message or leave blank for no dedication..."
+                                    rows={3}
+                                    className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-primary outline-none resize-none"
+                                />
                             </div>
                         )}
                     </div>
