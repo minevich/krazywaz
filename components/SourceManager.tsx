@@ -68,15 +68,44 @@ export default function SourceManager() {
         setIsProcessing(true)
 
         try {
+            let extractedText = ''
+
+            if (file.type === 'application/pdf') {
+                // STEP 1: Try to extract embedded text from PDF (works for digital PDFs)
+                console.log('Step 1: Extracting embedded text from PDF...')
+                extractedText = await extractTextFromPdf(file)
+                console.log(`Extracted ${extractedText.length} characters of embedded text`)
+            }
+
+            // If we got good embedded text (more than 100 chars), use it directly
+            if (extractedText.length > 100) {
+                console.log('Using embedded PDF text (no OCR needed!)')
+
+                // Send to server for AI parsing
+                const res = await fetch('/api/sources/parse-text', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: extractedText })
+                })
+
+                const data = await res.json() as { success: boolean; sources: ParsedSource[] }
+
+                if (data.success && data.sources?.length > 0) {
+                    setRawText(extractedText)
+                    setSources(data.sources)
+                    return
+                }
+            }
+
+            // STEP 2: Fallback to OCR (for scanned PDFs or images)
+            console.log('Step 2: Falling back to OCR...')
             let filesToProcess: { blob: Blob; name: string }[] = []
 
             if (file.type === 'application/pdf') {
-                // Convert PDF pages to images first (Client-side)
                 const images = await convertPdfToImages(file)
                 filesToProcess = images.map((blob, i) => ({ blob, name: `page-${i + 1}.png` }))
-                console.log(`Converted PDF to ${images.length} images`)
+                console.log(`Converted PDF to ${images.length} images for OCR`)
             } else {
-                // Direct image
                 filesToProcess = [{ blob: file, name: file.name }]
             }
 
@@ -85,7 +114,7 @@ export default function SourceManager() {
 
             for (let i = 0; i < filesToProcess.length; i++) {
                 const { blob, name } = filesToProcess[i]
-                console.log(`Processing ${name} (${i + 1}/${filesToProcess.length})`)
+                console.log(`OCR processing ${name} (${i + 1}/${filesToProcess.length})`)
 
                 const formData = new FormData()
                 formData.append('file', blob, name)
@@ -114,13 +143,43 @@ export default function SourceManager() {
             setSources(allSources)
 
             if (allSources.length === 0) {
-                alert('No text was found. The scan may be too blurry, or try adding sources manually.')
+                alert('No sources could be extracted. Try the manual paste option below.')
             }
         } catch (e) {
             console.error('Processing error:', e)
-            alert('Failed to process file: ' + (e as Error).message)
+            alert('Processing failed. Try the manual paste option.')
         } finally {
             setIsProcessing(false)
+        }
+    }
+
+    // Extract embedded text from PDF using pdf.js (works for digital/searchable PDFs)
+    const extractTextFromPdf = async (pdfFile: File): Promise<string> => {
+        try {
+            const pdfjsLib = await import('pdfjs-dist')
+            pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'
+
+            const arrayBuffer = await pdfFile.arrayBuffer()
+            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
+
+            let fullText = ''
+
+            for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                const page = await pdf.getPage(pageNum)
+                const textContent = await page.getTextContent()
+
+                // Extract text items and join them
+                const pageText = textContent.items
+                    .map((item: any) => item.str)
+                    .join(' ')
+
+                fullText += pageText + '\n\n'
+            }
+
+            return fullText.trim()
+        } catch (e) {
+            console.error('PDF text extraction failed:', e)
+            return ''
         }
     }
 
