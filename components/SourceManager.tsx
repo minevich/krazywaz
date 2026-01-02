@@ -167,6 +167,7 @@ export default function SourceManager() {
     const [loadingShiurim, setLoadingShiurim] = useState(false)
 
     const canvasRef = useRef<HTMLDivElement>(null)
+    const imageRef = useRef<HTMLImageElement>(null)
 
     // Load shiurim list
     useEffect(() => {
@@ -313,8 +314,9 @@ export default function SourceManager() {
     // ============================================================================
 
     const getPos = (e: React.MouseEvent) => {
-        if (!canvasRef.current) return { x: 0, y: 0 }
-        const rect = canvasRef.current.getBoundingClientRect()
+        // Use the image element directly for accurate positioning
+        if (!imageRef.current) return { x: 0, y: 0 }
+        const rect = imageRef.current.getBoundingClientRect()
         return {
             x: Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100)),
             y: Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100))
@@ -538,8 +540,17 @@ export default function SourceManager() {
                 }
             })
 
-            // Convert to data URL
-            const sourceSheetDataUrl = canvas.toDataURL('image/png')
+            // Store as JSON with individual source images for HTML rendering
+            const sourceData = sources.map((source, idx) => ({
+                id: source.id,
+                name: source.name,
+                image: source.clippedImage,
+                rotation: source.rotation,
+                reference: source.reference
+            }))
+
+            // Save as JSON string prefixed with "sources:" to distinguish from URLs
+            const sourceDocJson = 'sources:' + JSON.stringify(sourceData)
 
             // Upload to the shiur (replace sourceDoc)
             setStatusMessage('Uploading to shiur...')
@@ -548,7 +559,7 @@ export default function SourceManager() {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    sourceDoc: sourceSheetDataUrl
+                    sourceDoc: sourceDocJson
                 })
             })
 
@@ -559,7 +570,7 @@ export default function SourceManager() {
 
             const shiur = shiurim.find(s => s.id === selectedShiurId)
             setStatusMessage(`✓ Applied to "${shiur?.title}"`)
-            alert(`Source sheet successfully applied to "${shiur?.title}"!\n\nThe PDF has been replaced with your clipped sources.`)
+            alert(`Source sheet successfully applied to "${shiur?.title}"!\n\nThe sources have been saved and will display on the shiur page.`)
 
         } catch (err) {
             console.error('Failed to apply:', err)
@@ -606,9 +617,9 @@ export default function SourceManager() {
                         {/* Quick Grid */}
                         <div className="relative group">
                             <button className="px-2 py-1 bg-slate-100 hover:bg-slate-200 rounded">Grid</button>
-                            <div className="absolute right-0 top-full mt-1 bg-white border rounded shadow-lg p-1 hidden group-hover:block z-20">
+                            <div className="absolute right-0 top-full mt-1 bg-white border rounded shadow-lg p-1 hidden group-hover:block z-20 min-w-[80px]">
                                 {[2, 3, 4, 5, 6].map(n => (
-                                    <button key={n} onClick={() => applyQuickGrid(n)} className="block w-full text-left px-3 py-1 hover:bg-blue-50 rounded">{n} rows</button>
+                                    <button key={n} onClick={() => applyQuickGrid(n)} className="block w-full text-left px-3 py-1 hover:bg-blue-50 rounded whitespace-nowrap">{n} rows</button>
                                 ))}
                             </div>
                         </div>
@@ -670,7 +681,7 @@ export default function SourceManager() {
                                 onMouseUp={handleMouseUp}
                                 onMouseLeave={handleMouseUp}
                             >
-                                <img src={pages[currentPageIndex].imageDataUrl} alt="Page" className="max-h-[calc(100vh-100px)] shadow-xl rounded-lg pointer-events-none select-none" draggable={false} />
+                                <img ref={imageRef} src={pages[currentPageIndex].imageDataUrl} alt="Page" className="max-h-[calc(100vh-100px)] shadow-xl rounded-lg pointer-events-none select-none" draggable={false} />
 
                                 {/* Render sources */}
                                 {currentPageSources.map((source, idx) => {
