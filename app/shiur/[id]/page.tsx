@@ -99,12 +99,6 @@ export default async function ShiurPage({ params }: { params: Promise<{ id: stri
     notFound()
   }
 
-  // Redirect to slug URL if shiur has a custom slug and user accessed via ID
-  if (shiur.shouldRedirect) {
-    const { redirect } = await import('next/navigation')
-    redirect(shiur.shouldRedirect)
-  }
-
   return (
     <div className="min-h-screen flex flex-col bg-gray-50/50">
       {/* Compact Header for Mobile */}
