@@ -790,7 +790,7 @@ export default function SourceManager() {
                                                 points={polygonPoints.map(p => `${p.x},${p.y}`).join(' ')}
                                                 fill="none"
                                                 stroke="#2563eb"
-                                                strokeWidth="3px"
+                                                strokeWidth="1.5px"
                                                 vectorEffect="non-scaling-stroke"
                                             />
                                         )}
@@ -802,25 +802,25 @@ export default function SourceManager() {
                                                 x2={mousePos.x}
                                                 y2={mousePos.y}
                                                 stroke="#2563eb"
-                                                strokeWidth="3px"
-                                                vectorEffect="non-scaling-stroke"
-                                            />
-                                        )}
-                                        {/* Points - blue dots */}
-                                        {polygonPoints.map((p, i) => (
-                                            <circle
-                                                key={i}
-                                                cx={p.x}
-                                                cy={p.y}
-                                                r="0.8"
-                                                fill="#2563eb"
-                                                stroke="white"
                                                 strokeWidth="1.5px"
                                                 vectorEffect="non-scaling-stroke"
                                             />
-                                        ))}
+                                        )}
                                     </svg>
                                 )}
+
+                                {/* Points - Rendered as DIVs for constant pixel size */}
+                                {polygonPoints.map((p, i) => (
+                                    <div
+                                        key={i}
+                                        className="absolute w-2 h-2 bg-blue-600 rounded-full border border-white z-50 pointer-events-none"
+                                        style={{
+                                            left: `${p.x}%`,
+                                            top: `${p.y}%`,
+                                            transform: 'translate(-50%, -50%)'
+                                        }}
+                                    />
+                                ))}
                             </div>
                         </div>
 
