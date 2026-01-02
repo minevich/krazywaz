@@ -778,15 +778,7 @@ export default function SourceManager() {
                                 {/* Drawing preview - polygon with LINES */}
                                 {polygonPoints.length > 0 && (
                                     <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 50 }}>
-                                        {/* Filled preview area */}
-                                        {polygonPoints.length >= 3 && (
-                                            <polygon
-                                                points={polygonPoints.map(p => `${p.x}%,${p.y}%`).join(' ')}
-                                                fill="rgba(59, 130, 246, 0.15)"
-                                                stroke="none"
-                                            />
-                                        )}
-                                        {/* Lines connecting all points - ALWAYS visible */}
+                                        {/* Lines connecting points in order - solid blue lines */}
                                         {polygonPoints.length > 1 && (
                                             <polyline
                                                 points={polygonPoints.map(p => `${p.x}%,${p.y}%`).join(' ')}
@@ -795,44 +787,17 @@ export default function SourceManager() {
                                                 strokeWidth="2"
                                             />
                                         )}
-                                        {/* Closing line preview - dashed */}
-                                        {polygonPoints.length >= 3 && (
-                                            <line
-                                                x1={`${polygonPoints[polygonPoints.length - 1].x}%`}
-                                                y1={`${polygonPoints[polygonPoints.length - 1].y}%`}
-                                                x2={`${polygonPoints[0].x}%`}
-                                                y2={`${polygonPoints[0].y}%`}
-                                                stroke="#2563eb"
-                                                strokeWidth="2"
-                                                strokeDasharray="5,5"
-                                            />
-                                        )}
-                                        {/* Points - larger and more visible */}
+                                        {/* Points - blue dots */}
                                         {polygonPoints.map((p, i) => (
                                             <circle
                                                 key={i}
                                                 cx={`${p.x}%`}
                                                 cy={`${p.y}%`}
-                                                r="6"
+                                                r="5"
                                                 fill="#2563eb"
                                                 stroke="white"
                                                 strokeWidth="2"
                                             />
-                                        ))}
-                                        {/* Point labels */}
-                                        {polygonPoints.map((p, i) => (
-                                            <text
-                                                key={`label-${i}`}
-                                                x={`${p.x}%`}
-                                                y={`${p.y}%`}
-                                                dy="-12"
-                                                textAnchor="middle"
-                                                fontSize="10"
-                                                fill="#1e40af"
-                                                fontWeight="bold"
-                                            >
-                                                {i + 1}
-                                            </text>
                                         ))}
                                     </svg>
                                 )}

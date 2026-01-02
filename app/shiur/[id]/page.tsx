@@ -44,6 +44,7 @@ async function getShiur(id: string) {
     return {
       ...shiur,
       platformLinks: links || null,
+      shouldRedirect: shiur.slug ? `/${shiur.slug}` : null, // Redirect to slug URL if exists
     }
   } catch (error) {
     console.error('Error fetching shiur:', error)
@@ -96,6 +97,12 @@ export default async function ShiurPage({ params }: { params: Promise<{ id: stri
 
   if (!shiur) {
     notFound()
+  }
+
+  // Redirect to slug URL if shiur has a custom slug and user accessed via ID
+  if (shiur.shouldRedirect) {
+    const { redirect } = await import('next/navigation')
+    redirect(shiur.shouldRedirect)
   }
 
   return (
