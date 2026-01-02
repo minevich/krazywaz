@@ -25,7 +25,7 @@ interface PageData {
 }
 
 interface Shiur {
-    id: number
+    id: string
     title: string
     slug: string
 }
@@ -163,7 +163,7 @@ export default function SourceManager() {
 
     // Shiur attachment
     const [shiurim, setShiurim] = useState<Shiur[]>([])
-    const [selectedShiurId, setSelectedShiurId] = useState<number | null>(null)
+    const [selectedShiurId, setSelectedShiurId] = useState<string | null>(null)
     const [loadingShiurim, setLoadingShiurim] = useState(false)
 
     const canvasRef = useRef<HTMLDivElement>(null)
@@ -363,9 +363,9 @@ export default function SourceManager() {
                 const centerX = source.box.x + source.box.width / 2
                 const centerY = source.box.y + source.box.height / 2
                 const rawAngle = Math.atan2(pos.y - centerY, pos.x - centerX) * (180 / Math.PI)
-                // Add 90 degrees offset so 0° is at top, and dampen to 5° steps
+                // Add 90 degrees offset so 0° is at top, and dampen to 2° steps
                 const adjustedAngle = rawAngle + 90
-                const snappedAngle = Math.round(adjustedAngle / 5) * 5
+                const snappedAngle = Math.round(adjustedAngle / 2) * 2
                 // Normalize to -180 to 180
                 const normalizedAngle = ((snappedAngle + 180) % 360) - 180
                 updateSourceRotation(editingSourceId, normalizedAngle)
@@ -815,7 +815,19 @@ export default function SourceManager() {
                                                     className="flex-1 bg-transparent font-medium border-b border-transparent focus:border-blue-500 focus:outline-none"
                                                     placeholder="Source name..."
                                                 />
-                                                <button onClick={() => deleteSource(source.id)} className="text-red-500 hover:bg-red-100 rounded px-2">Delete</button>
+                                                {/* MANUAL ROTATION INPUT */}
+                                                <div className="flex items-center gap-1">
+                                                    <input
+                                                        type="number"
+                                                        value={source.rotation}
+                                                        onChange={(e) => updateSourceRotation(source.id, parseInt(e.target.value) || 0)}
+                                                        className="w-16 text-xs px-2 py-1 border rounded text-center"
+                                                        min="-180"
+                                                        max="180"
+                                                    />
+                                                    <span className="text-xs text-slate-500">°</span>
+                                                </div>
+                                                <button onClick={() => deleteSource(source.id)} className="text-red-500 hover:bg-red-100 rounded px-2 text-sm">Delete</button>
                                             </div>
                                             {/* Image */}
                                             {source.clippedImage ? (
@@ -830,14 +842,14 @@ export default function SourceManager() {
 
                             {/* APPLY TO SHIUR */}
                             {sources.length > 0 && (
-                                <div className="mt-8 p-6 bg-slate-50 rounded-lg border">
-                                    <h2 className="font-semibold mb-4">Attach to Shiur</h2>
-                                    <div className="flex gap-3">
+                                <div className="mt-8 p-4 bg-slate-50 rounded-lg border">
+                                    <h2 className="font-semibold mb-3 text-sm">Attach to Shiur</h2>
+                                    <div className="flex flex-col gap-2">
                                         <select
                                             value={selectedShiurId || ''}
-                                            onChange={(e) => setSelectedShiurId(e.target.value ? parseInt(e.target.value) : null)}
-                                            className="flex-1 px-3 py-2 border rounded"
-                                            disabled={loadingShiurim}
+                                            onChange={(e) => setSelectedShiurId(e.target.value || null)}
+                                            className="w-full px-3 py-2 border rounded text-sm"
+                                            disabled={loadingShiurim || saving}
                                         >
                                             <option value="">-- Select a Shiur --</option>
                                             {shiurim.map(s => (
@@ -846,10 +858,10 @@ export default function SourceManager() {
                                         </select>
                                         <button
                                             onClick={applyToShiur}
-                                            disabled={!selectedShiurId}
-                                            className="px-6 py-2 bg-blue-600 text-white rounded font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            disabled={!selectedShiurId || saving}
+                                            className="w-full px-4 py-2 bg-blue-600 text-white rounded font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                                         >
-                                            Apply Sources
+                                            {saving ? 'Saving...' : 'Apply to Shiur'}
                                         </button>
                                     </div>
                                 </div>
