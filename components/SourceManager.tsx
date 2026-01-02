@@ -778,37 +778,45 @@ export default function SourceManager() {
 
                                 {/* Drawing preview - polygon with LINES */}
                                 {polygonPoints.length > 0 && (
-                                    <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 50 }}>
+                                    <svg
+                                        className="absolute inset-0 w-full h-full pointer-events-none"
+                                        style={{ zIndex: 50 }}
+                                        viewBox="0 0 100 100"
+                                        preserveAspectRatio="none"
+                                    >
                                         {/* Lines connecting points in order - solid blue lines */}
                                         {polygonPoints.length > 1 && (
                                             <polyline
-                                                points={polygonPoints.map(p => `${p.x}%,${p.y}%`).join(' ')}
+                                                points={polygonPoints.map(p => `${p.x},${p.y}`).join(' ')}
                                                 fill="none"
                                                 stroke="#2563eb"
-                                                strokeWidth="3"
+                                                strokeWidth="3px"
+                                                vectorEffect="non-scaling-stroke"
                                             />
                                         )}
                                         {/* Live line from last point to mouse cursor */}
                                         {polygonPoints.length > 0 && mousePos && (
                                             <line
-                                                x1={`${polygonPoints[polygonPoints.length - 1].x}%`}
-                                                y1={`${polygonPoints[polygonPoints.length - 1].y}%`}
-                                                x2={`${mousePos.x}%`}
-                                                y2={`${mousePos.y}%`}
+                                                x1={polygonPoints[polygonPoints.length - 1].x}
+                                                y1={polygonPoints[polygonPoints.length - 1].y}
+                                                x2={mousePos.x}
+                                                y2={mousePos.y}
                                                 stroke="#2563eb"
-                                                strokeWidth="3"
+                                                strokeWidth="3px"
+                                                vectorEffect="non-scaling-stroke"
                                             />
                                         )}
                                         {/* Points - blue dots */}
                                         {polygonPoints.map((p, i) => (
                                             <circle
                                                 key={i}
-                                                cx={`${p.x}%`}
-                                                cy={`${p.y}%`}
-                                                r="5"
+                                                cx={p.x}
+                                                cy={p.y}
+                                                r="4"
                                                 fill="#2563eb"
                                                 stroke="white"
-                                                strokeWidth="2"
+                                                strokeWidth="2px"
+                                                vectorEffect="non-scaling-stroke"
                                             />
                                         ))}
                                     </svg>
