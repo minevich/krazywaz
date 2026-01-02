@@ -655,18 +655,55 @@ export default function SourceManager() {
             <div className="flex-1 flex overflow-hidden">
                 {/* UPLOAD */}
                 {appState === 'upload' && (
-                    <div className="flex-1 flex items-center justify-center">
-                        <div
-                            onClick={() => document.getElementById('file-input')?.click()}
-                            onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleFileUpload(f) }}
-                            onDragOver={(e) => e.preventDefault()}
-                            className="border-2 border-dashed border-blue-300 rounded-2xl p-12 text-center cursor-pointer hover:border-blue-500 hover:bg-blue-50/50"
-                        >
-                            <div className="text-5xl mb-4">📄</div>
-                            <h2 className="text-xl font-semibold mb-2">Upload Source Sheet</h2>
-                            <p className="text-slate-500">PDF or Image</p>
-                            {error && <p className="text-red-600 mt-2">{error}</p>}
-                            <input id="file-input" type="file" accept=".pdf,image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileUpload(f) }} />
+                    <div className="flex-1 flex items-center justify-center bg-gradient-to-br from-slate-100 via-blue-50 to-indigo-100">
+                        <div className="max-w-lg w-full mx-auto p-8">
+                            {/* Logo/Title */}
+                            <div className="text-center mb-8">
+                                <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl shadow-lg mb-4">
+                                    <span className="text-4xl">📜</span>
+                                </div>
+                                <h1 className="text-3xl font-bold text-slate-800">Source Clipper</h1>
+                                <p className="text-slate-500 mt-2">Create beautiful source sheets from PDFs</p>
+                            </div>
+
+                            {/* Upload Box */}
+                            <div
+                                onClick={() => document.getElementById('file-input')?.click()}
+                                onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleFileUpload(f) }}
+                                onDragOver={(e) => e.preventDefault()}
+                                className="bg-white border-2 border-dashed border-blue-300 rounded-2xl p-10 text-center cursor-pointer hover:border-blue-500 hover:bg-blue-50/30 transition-all shadow-lg hover:shadow-xl"
+                            >
+                                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                    <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                    </svg>
+                                </div>
+                                <h2 className="text-xl font-semibold text-slate-800 mb-2">Drop your PDF here</h2>
+                                <p className="text-slate-500 mb-4">or click to browse files</p>
+                                <div className="inline-flex items-center gap-2 text-sm text-slate-400">
+                                    <span className="px-2 py-1 bg-slate-100 rounded">PDF</span>
+                                    <span className="px-2 py-1 bg-slate-100 rounded">PNG</span>
+                                    <span className="px-2 py-1 bg-slate-100 rounded">JPG</span>
+                                </div>
+                                {error && <p className="text-red-600 mt-4 font-medium">{error}</p>}
+                                <input id="file-input" type="file" accept=".pdf,image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileUpload(f) }} />
+                            </div>
+
+                            {/* Features */}
+                            <div className="mt-8 grid grid-cols-3 gap-4 text-center">
+                                <div className="p-3">
+                                    <div className="text-2xl mb-1">✂️</div>
+                                    <p className="text-xs text-slate-600">Clip Sources</p>
+                                </div>
+                                <div className="p-3">
+                                    <div className="text-2xl mb-1">🔄</div>
+                                    <p className="text-xs text-slate-600">Rotate & Resize</p>
+                                </div>
+                                <div className="p-3">
+                                    <div className="text-2xl mb-1">📎</div>
+                                    <p className="text-xs text-slate-600">Attach to Shiur</p>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 )}
@@ -897,26 +934,29 @@ export default function SourceManager() {
 
                             {/* APPLY TO SHIUR */}
                             {sources.length > 0 && (
-                                <div className="mt-8 p-4 bg-slate-50 rounded-lg border">
-                                    <h2 className="font-semibold mb-3 text-sm">Attach to Shiur</h2>
-                                    <div className="flex flex-col gap-2">
+                                <div className="mt-8 p-4 bg-gradient-to-r from-slate-50 to-blue-50 rounded-lg border">
+                                    <h2 className="font-semibold mb-3 text-sm flex items-center gap-2">
+                                        <span>📎</span> Attach to Shiur
+                                    </h2>
+                                    <div className="space-y-2">
                                         <select
                                             value={selectedShiurId || ''}
                                             onChange={(e) => setSelectedShiurId(e.target.value || null)}
-                                            className="w-full px-3 py-2 border rounded text-sm"
+                                            className="px-3 py-2 border rounded text-sm bg-white max-w-full"
+                                            style={{ width: 'auto', minWidth: '200px', maxWidth: '100%' }}
                                             disabled={loadingShiurim || saving}
                                         >
                                             <option value="">-- Select a Shiur --</option>
                                             {shiurim.map(s => (
-                                                <option key={s.id} value={s.id}>{s.title}</option>
+                                                <option key={s.id} value={s.id}>{s.title.substring(0, 50)}{s.title.length > 50 ? '...' : ''}</option>
                                             ))}
                                         </select>
                                         <button
                                             onClick={applyToShiur}
                                             disabled={!selectedShiurId || saving}
-                                            className="w-full px-4 py-2 bg-blue-600 text-white rounded font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                                            className="w-full px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg font-medium hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm shadow-sm"
                                         >
-                                            {saving ? 'Saving...' : 'Apply to Shiur'}
+                                            {saving ? '⏳ Saving...' : '✓ Apply to Shiur'}
                                         </button>
                                     </div>
                                 </div>
@@ -925,13 +965,6 @@ export default function SourceManager() {
                     </div>
                 )}
             </div>
-
-            {/* Hint for polygon mode */}
-            {appState === 'editing' && drawMode === 'polygon' && polygonPoints.length === 0 && (
-                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/80 text-white px-4 py-2 rounded-full text-sm">
-                    Click to add points, then click ✓ to finish
-                </div>
-            )}
         </div>
     )
 }
