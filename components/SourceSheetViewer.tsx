@@ -103,13 +103,13 @@ export default function SourceSheetViewer({ sourceDoc, sourcesJson, title }: Sou
     return (
         <div className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
             {/* Unified Header */}
-            <div className="bg-gradient-to-r from-slate-800 to-slate-700 px-5 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="bg-white px-5 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-100">
                 <div className="flex items-center gap-3">
                     <span className="text-2xl">📜</span>
                     <div>
-                        <h2 className="text-lg font-bold text-white">Source Sheet</h2>
+                        <h2 className="text-lg font-serif font-semibold text-primary">Source Sheet</h2>
                         {hasAnySources && !showPdf && (
-                            <p className="text-slate-300 text-xs">{allSources.length} sources</p>
+                            <p className="text-muted-foreground text-xs">{allSources.length} sources</p>
                         )}
                     </div>
                 </div>
@@ -127,7 +127,7 @@ export default function SourceSheetViewer({ sourceDoc, sourcesJson, title }: Sou
                                     expandAll()
                                 }
                             }}
-                            className="bg-white/10 hover:bg-white/20 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5"
+                            className="bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5"
                         >
                             {expandedSources.size > 0 ? (
                                 <>
@@ -145,12 +145,12 @@ export default function SourceSheetViewer({ sourceDoc, sourcesJson, title }: Sou
 
                     {/* View Toggle (Only if both formats exist) */}
                     {hasAnySources && hasPdfUrl && (
-                        <div className="flex items-center bg-slate-900/50 p-1 rounded-lg">
+                        <div className="flex items-center bg-gray-100 p-1 rounded-lg">
                             <button
                                 onClick={() => setShowPdf(false)}
                                 className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${!showPdf
-                                    ? 'bg-white text-slate-800 shadow-sm'
-                                    : 'text-slate-300 hover:text-white hover:bg-white/5'
+                                    ? 'bg-white text-primary shadow-sm border border-gray-200'
+                                    : 'text-gray-500 hover:text-gray-900'
                                     }`}
                             >
                                 Clipped
@@ -158,8 +158,8 @@ export default function SourceSheetViewer({ sourceDoc, sourcesJson, title }: Sou
                             <button
                                 onClick={() => setShowPdf(true)}
                                 className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${showPdf
-                                    ? 'bg-white text-slate-800 shadow-sm'
-                                    : 'text-slate-300 hover:text-white hover:bg-white/5'
+                                    ? 'bg-white text-primary shadow-sm border border-gray-200'
+                                    : 'text-gray-500 hover:text-gray-900'
                                     }`}
                             >
                                 PDF
