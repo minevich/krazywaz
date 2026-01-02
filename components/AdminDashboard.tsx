@@ -105,6 +105,25 @@ export default function AdminDashboard() {
     }
   }
 
+  const handleDeleteSourceSheet = async (shiurId: string) => {
+    try {
+      const response = await fetch(`/api/shiurim/${shiurId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sourceDoc: null })
+      })
+
+      if (response.ok) {
+        alert('Source sheet deleted successfully')
+        fetchShiurim()
+      } else {
+        alert('Error deleting source sheet')
+      }
+    } catch (error) {
+      alert('Error deleting source sheet')
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -194,6 +213,9 @@ export default function AdminDashboard() {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Duration
                   </th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Source Sheet
+                  </th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Actions
                   </th>
@@ -212,6 +234,35 @@ export default function AdminDashboard() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {shiur.duration || 'N/A'}
+                    </td>
+                    {/* Source Sheet Status */}
+                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                      {shiur.sourceDoc?.startsWith('sources:') ? (
+                        <div className="flex items-center justify-center gap-2">
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            ✓ Clipped
+                          </span>
+                          <button
+                            onClick={() => {
+                              if (confirm('Delete this source sheet? The shiur will keep its URL if it had one.')) {
+                                handleDeleteSourceSheet(shiur.id)
+                              }
+                            }}
+                            className="text-red-500 hover:text-red-700 p-1"
+                            title="Delete source sheet"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ) : shiur.sourceDoc ? (
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          📄 URL
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
+                          None
+                        </span>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex items-center justify-end gap-2">

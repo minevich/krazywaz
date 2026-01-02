@@ -20,40 +20,29 @@ interface SourceData {
 function convertToEmbedUrl(url: string): string {
   if (!url) return url
 
-  // If it's already a preview URL, return as is
   if (url.includes('/preview') || url.includes('embedded=true')) {
     return url
   }
 
-  // Handle Google Drive files (PDFs, etc.)
-  // Extract file ID from Google Drive URL
   const driveMatch = url.match(/\/d\/([a-zA-Z0-9-_]+)/)
   if (driveMatch && driveMatch[1]) {
     const fileId = driveMatch[1]
-
-    // Check if it's a Google Doc
     if (url.includes('docs.google.com/document')) {
-      // Convert to published format
       return `https://docs.google.com/document/d/${fileId}/pub?embedded=true`
     }
-
-    // For Google Drive files (PDFs, etc.), use the preview format
-    // This works if the file is shared with "Anyone with the link"
     return `https://drive.google.com/file/d/${fileId}/preview`
   }
 
-  // For other URLs (direct PDF links, HTML pages, etc.), return as is
   return url
 }
 
 export default function SourceSheetViewer({ sourceDoc, title }: SourceSheetViewerProps) {
-  // Check if this is the new JSON format
   const isSourcesJson = sourceDoc?.startsWith('sources:')
 
   const sources: SourceData[] = useMemo(() => {
     if (!isSourcesJson) return []
     try {
-      return JSON.parse(sourceDoc.slice(8)) // Remove 'sources:' prefix
+      return JSON.parse(sourceDoc.slice(8))
     } catch {
       return []
     }
@@ -67,48 +56,78 @@ export default function SourceSheetViewer({ sourceDoc, title }: SourceSheetViewe
   if (!sourceDoc) return null
 
   // ============================================================================
-  // NEW: Render HTML sources from clipped images
+  // NEW ELEGANT DESIGN: Render HTML sources from clipped images
   // ============================================================================
   if (isSourcesJson && sources.length > 0) {
     return (
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="p-4 md:p-6 lg:p-10">
-          <h2 className="font-serif text-xl md:text-2xl font-semibold text-primary mb-6">
-            Source Sheet
-          </h2>
+      <div className="bg-gradient-to-b from-slate-50 to-white rounded-3xl shadow-lg border border-slate-200/60 overflow-hidden">
+        {/* Header */}
+        <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 px-6 py-5 md:px-8 md:py-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl md:text-2xl font-bold text-white tracking-tight">
+                📜 Source Sheet
+              </h2>
+              <p className="text-blue-100 text-sm mt-1">
+                {sources.length} source{sources.length !== 1 ? 's' : ''} • {title}
+              </p>
+            </div>
+            <div className="hidden md:flex items-center gap-2 bg-white/20 backdrop-blur-sm rounded-full px-4 py-2">
+              <span className="text-white/80 text-sm">Scroll to explore</span>
+              <span className="text-white animate-bounce">↓</span>
+            </div>
+          </div>
+        </div>
 
-          <div className="space-y-6">
-            {sources.map((source, idx) => (
-              <div key={source.id} className="border rounded-lg overflow-hidden shadow-sm">
-                {/* Source header */}
-                <div className="bg-gradient-to-r from-blue-50 to-slate-50 px-4 py-3 flex items-center gap-3 border-b">
-                  <span className="w-8 h-8 bg-blue-600 text-white text-sm font-bold rounded-full flex items-center justify-center shadow">
-                    {idx + 1}
-                  </span>
-                  <span className="font-medium text-slate-800">{source.name}</span>
+        {/* Sources List */}
+        <div className="p-4 md:p-6 lg:p-8 space-y-6">
+          {sources.map((source, idx) => (
+            <article
+              key={source.id}
+              className="group bg-white rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-xl hover:border-blue-200 transition-all duration-300 overflow-hidden"
+            >
+              {/* Source Header */}
+              <div className="flex items-center gap-4 px-5 py-4 bg-gradient-to-r from-slate-50 to-transparent border-b border-slate-100">
+                <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-bold rounded-xl flex items-center justify-center shadow-md group-hover:scale-110 transition-transform">
+                  {idx + 1}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-semibold text-slate-800 truncate text-lg">
+                    {source.name}
+                  </h3>
                   {source.reference && (
-                    <span className="ml-auto text-sm text-blue-600 font-medium">
+                    <p className="text-sm text-blue-600 font-medium mt-0.5">
                       {source.reference}
-                    </span>
+                    </p>
                   )}
                 </div>
+              </div>
 
-                {/* Source image */}
-                {source.image && (
-                  <div className="bg-white">
+              {/* Source Image */}
+              {source.image && (
+                <div className="relative bg-gradient-to-b from-slate-50 to-slate-100 p-4 md:p-6">
+                  <div className="bg-white rounded-xl shadow-inner border border-slate-200/50 overflow-hidden">
                     <img
                       src={source.image}
                       alt={source.name}
-                      className="w-full"
+                      className="w-full block"
                       style={{
-                        transform: source.rotation ? `rotate(${source.rotation}deg)` : undefined
+                        transform: source.rotation ? `rotate(${source.rotation}deg)` : undefined,
+                        transformOrigin: 'center'
                       }}
                     />
                   </div>
-                )}
-              </div>
-            ))}
-          </div>
+                </div>
+              )}
+            </article>
+          ))}
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 text-center">
+          <p className="text-xs text-slate-400">
+            Source sheet created with Rabbi Kraz's Source Clipper
+          </p>
         </div>
       </div>
     )
@@ -136,7 +155,6 @@ export default function SourceSheetViewer({ sourceDoc, title }: SourceSheetViewe
           </a>
         </div>
 
-        {/* Embedded Source Sheet - Full Width, Responsive Height */}
         <div
           className="w-full border border-gray-200 rounded-lg overflow-hidden bg-gray-50"
           style={{
@@ -157,7 +175,6 @@ export default function SourceSheetViewer({ sourceDoc, title }: SourceSheetViewe
             }}
           />
         </div>
-
       </div>
     </div>
   )
