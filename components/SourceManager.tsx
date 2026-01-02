@@ -656,54 +656,20 @@ export default function SourceManager() {
             <div className="flex-1 flex overflow-hidden">
                 {/* UPLOAD */}
                 {appState === 'upload' && (
-                    <div className="flex-1 flex items-center justify-center bg-gradient-to-br from-slate-100 via-blue-50 to-indigo-100">
-                        <div className="max-w-lg w-full mx-auto p-8">
-                            {/* Logo/Title */}
-                            <div className="text-center mb-8">
-                                <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl shadow-lg mb-4">
-                                    <span className="text-4xl">📜</span>
-                                </div>
-                                <h1 className="text-3xl font-bold text-slate-800">Source Clipper</h1>
-                                <p className="text-slate-500 mt-2">Create beautiful source sheets from PDFs</p>
-                            </div>
-
+                    <div className="flex-1 flex items-center justify-center bg-slate-50">
+                        <div className="max-w-sm w-full mx-auto p-6">
                             {/* Upload Box */}
                             <div
                                 onClick={() => document.getElementById('file-input')?.click()}
                                 onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleFileUpload(f) }}
                                 onDragOver={(e) => e.preventDefault()}
-                                className="bg-white border-2 border-dashed border-blue-300 rounded-2xl p-10 text-center cursor-pointer hover:border-blue-500 hover:bg-blue-50/30 transition-all shadow-lg hover:shadow-xl"
+                                className="bg-white border-2 border-dashed border-slate-300 rounded-xl p-8 text-center cursor-pointer hover:border-blue-500 hover:bg-blue-50/20 transition-all"
                             >
-                                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                                    <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                                    </svg>
-                                </div>
-                                <h2 className="text-xl font-semibold text-slate-800 mb-2">Drop your PDF here</h2>
-                                <p className="text-slate-500 mb-4">or click to browse files</p>
-                                <div className="inline-flex items-center gap-2 text-sm text-slate-400">
-                                    <span className="px-2 py-1 bg-slate-100 rounded">PDF</span>
-                                    <span className="px-2 py-1 bg-slate-100 rounded">PNG</span>
-                                    <span className="px-2 py-1 bg-slate-100 rounded">JPG</span>
-                                </div>
-                                {error && <p className="text-red-600 mt-4 font-medium">{error}</p>}
+                                <div className="text-4xl mb-3">📄</div>
+                                <h2 className="text-lg font-semibold text-slate-700 mb-1">Drop PDF here</h2>
+                                <p className="text-sm text-slate-400">or click to browse</p>
+                                {error && <p className="text-red-600 mt-3 text-sm">{error}</p>}
                                 <input id="file-input" type="file" accept=".pdf,image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileUpload(f) }} />
-                            </div>
-
-                            {/* Features */}
-                            <div className="mt-8 grid grid-cols-3 gap-4 text-center">
-                                <div className="p-3">
-                                    <div className="text-2xl mb-1">✂️</div>
-                                    <p className="text-xs text-slate-600">Clip Sources</p>
-                                </div>
-                                <div className="p-3">
-                                    <div className="text-2xl mb-1">🔄</div>
-                                    <p className="text-xs text-slate-600">Rotate & Resize</p>
-                                </div>
-                                <div className="p-3">
-                                    <div className="text-2xl mb-1">📎</div>
-                                    <p className="text-xs text-slate-600">Attach to Shiur</p>
-                                </div>
                             </div>
                         </div>
                     </div>
