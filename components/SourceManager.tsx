@@ -173,9 +173,14 @@ export default function SourceManager() {
         const loadShiurim = async () => {
             setLoadingShiurim(true)
             try {
-                const res = await fetch('/api/shiurim?limit=100')
-                const data = await res.json() as { shiurim?: Shiur[] }
-                setShiurim(data.shiurim || [])
+                const res = await fetch('/api/shiurim')
+                const data = await res.json()
+                // API returns array directly, not { shiurim: [...] }
+                if (Array.isArray(data)) {
+                    setShiurim(data.map((s: any) => ({ id: s.id, title: s.title, slug: s.slug })))
+                } else {
+                    console.error('Unexpected shiurim response:', data)
+                }
             } catch (e) {
                 console.error('Failed to load shiurim:', e)
             }
@@ -340,6 +345,7 @@ export default function SourceManager() {
 
     const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
         if (appState !== 'editing' || drawMode !== 'rectangle' || editMode !== 'none') return
+        e.preventDefault() // Prevent text selection
         const pos = getPos(e)
         setIsDrawing(true)
         setDrawStart(pos)
@@ -350,14 +356,19 @@ export default function SourceManager() {
     const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
         const pos = getPos(e)
 
-        // Rotating
+        // Rotating - with damping for less sensitivity
         if (editMode === 'rotate' && editingSourceId && editStart) {
             const source = sources.find(s => s.id === editingSourceId)
             if (source?.box) {
                 const centerX = source.box.x + source.box.width / 2
                 const centerY = source.box.y + source.box.height / 2
-                const angle = Math.atan2(pos.y - centerY, pos.x - centerX) * (180 / Math.PI)
-                updateSourceRotation(editingSourceId, Math.round(angle))
+                const rawAngle = Math.atan2(pos.y - centerY, pos.x - centerX) * (180 / Math.PI)
+                // Add 90 degrees offset so 0° is at top, and dampen to 5° steps
+                const adjustedAngle = rawAngle + 90
+                const snappedAngle = Math.round(adjustedAngle / 5) * 5
+                // Normalize to -180 to 180
+                const normalizedAngle = ((snappedAngle + 180) % 360) - 180
+                updateSourceRotation(editingSourceId, normalizedAngle)
             }
             return
         }
@@ -436,6 +447,7 @@ export default function SourceManager() {
     const startDrag = (e: React.MouseEvent, source: Source) => {
         if (!source.box) return
         e.stopPropagation()
+        e.preventDefault() // Prevent text selection
         setEditMode('drag')
         setEditingSourceId(source.id)
         setEditStart({ ...getPos(e), box: { ...source.box } })
@@ -445,6 +457,7 @@ export default function SourceManager() {
     const startResize = (e: React.MouseEvent, source: Source, handle: 'nw' | 'ne' | 'sw' | 'se') => {
         if (!source.box) return
         e.stopPropagation()
+        e.preventDefault() // Prevent text selection
         setEditMode('resize')
         setResizeHandle(handle)
         setEditingSourceId(source.id)
@@ -454,6 +467,7 @@ export default function SourceManager() {
 
     const startRotate = (e: React.MouseEvent, source: Source) => {
         e.stopPropagation()
+        e.preventDefault() // Prevent text selection
         setEditMode('rotate')
         setEditingSourceId(source.id)
         setEditStart({ ...getPos(e), rotation: source.rotation })
@@ -466,14 +480,94 @@ export default function SourceManager() {
     // APPLY TO SHIUR
     // ============================================================================
 
+    const [saving, setSaving] = useState(false)
+
     const applyToShiur = async () => {
         if (!selectedShiurId) {
             alert('Please select a shiur first')
             return
         }
-        // For now just alert - you can implement actual saving logic
-        const shiur = shiurim.find(s => s.id === selectedShiurId)
-        alert(`Source sheet with ${sources.length} sources would be attached to: ${shiur?.title}\n\n(This is a placeholder - implement actual save logic)`)
+
+        setSaving(true)
+        setStatusMessage('Generating source sheet...')
+
+        try {
+            // Combine all source images into one PDF-like image
+            const canvas = document.createElement('canvas')
+            const ctx = canvas.getContext('2d')!
+
+            // Calculate total height needed
+            const imgWidth = 800
+            let totalHeight = 0
+            const loadedImages: HTMLImageElement[] = []
+
+            for (const source of sources) {
+                if (source.clippedImage) {
+                    const img = new Image()
+                    img.src = source.clippedImage
+                    await new Promise(resolve => { img.onload = resolve })
+                    const aspectRatio = img.height / img.width
+                    totalHeight += imgWidth * aspectRatio + 40 // 40px padding between
+                    loadedImages.push(img)
+                }
+            }
+
+            canvas.width = imgWidth
+            canvas.height = totalHeight + 60
+
+            // White background
+            ctx.fillStyle = 'white'
+            ctx.fillRect(0, 0, canvas.width, canvas.height)
+
+            // Draw each source
+            let yOffset = 30
+            sources.forEach((source, idx) => {
+                if (source.clippedImage && loadedImages[idx]) {
+                    const img = loadedImages[idx]
+                    const aspectRatio = img.height / img.width
+                    const h = imgWidth * aspectRatio
+
+                    // Draw source name
+                    ctx.fillStyle = '#1e293b'
+                    ctx.font = 'bold 16px system-ui'
+                    ctx.fillText(`${idx + 1}. ${source.name}`, 10, yOffset - 5)
+
+                    // Draw image
+                    ctx.drawImage(img, 0, yOffset, imgWidth, h)
+                    yOffset += h + 40
+                }
+            })
+
+            // Convert to data URL
+            const sourceSheetDataUrl = canvas.toDataURL('image/png')
+
+            // Upload to the shiur (replace sourceDoc)
+            setStatusMessage('Uploading to shiur...')
+
+            const res = await fetch(`/api/shiurim/${selectedShiurId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sourceDoc: sourceSheetDataUrl
+                })
+            })
+
+            if (!res.ok) {
+                const errData = await res.json() as { error?: string }
+                throw new Error(errData.error || 'Failed to update shiur')
+            }
+
+            const shiur = shiurim.find(s => s.id === selectedShiurId)
+            setStatusMessage(`✓ Applied to "${shiur?.title}"`)
+            alert(`Source sheet successfully applied to "${shiur?.title}"!\n\nThe PDF has been replaced with your clipped sources.`)
+
+        } catch (err) {
+            console.error('Failed to apply:', err)
+            alert(`Error: ${err instanceof Error ? err.message : String(err)}`)
+            setStatusMessage('Failed to apply')
+        }
+
+        setSaving(false)
     }
 
     // ============================================================================
@@ -568,14 +662,15 @@ export default function SourceManager() {
                         <div className="flex-1 overflow-auto p-4 flex justify-center">
                             <div
                                 ref={canvasRef}
-                                className="relative inline-block cursor-crosshair"
+                                className="relative inline-block cursor-crosshair select-none"
+                                style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
                                 onClick={handleCanvasClick}
                                 onMouseDown={handleMouseDown}
                                 onMouseMove={handleMouseMove}
                                 onMouseUp={handleMouseUp}
                                 onMouseLeave={handleMouseUp}
                             >
-                                <img src={pages[currentPageIndex].imageDataUrl} alt="Page" className="max-h-[calc(100vh-100px)] shadow-xl rounded-lg pointer-events-none" draggable={false} />
+                                <img src={pages[currentPageIndex].imageDataUrl} alt="Page" className="max-h-[calc(100vh-100px)] shadow-xl rounded-lg pointer-events-none select-none" draggable={false} />
 
                                 {/* Render sources */}
                                 {currentPageSources.map((source, idx) => {
