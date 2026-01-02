@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 
 // ============================================================================
 // TYPES
@@ -9,9 +9,12 @@ import { useState, useRef, useCallback } from 'react'
 interface Source {
     id: string
     pageIndex: number
-    box: { x: number; y: number; width: number; height: number }
-    rotation: number  // Degrees of rotation
-    clippedImage: string | null  // Data URL of the clipped region
+    // For rectangles
+    box: { x: number; y: number; width: number; height: number } | null
+    // For polygons (array of points, each as % of image size)
+    polygon: Array<{ x: number; y: number }> | null
+    rotation: number  // -180 to 180 degrees
+    clippedImage: string | null
     text: string
     reference: string | null
     sefariaUrl: string | null
@@ -22,19 +25,19 @@ interface PageData {
     imageDataUrl: string
     width: number
     height: number
+    imageElement: HTMLImageElement | null
 }
 
 type AppState = 'upload' | 'processing' | 'editing' | 'preview'
+type DrawMode = 'rectangle' | 'polygon'
 
 // ============================================================================
-// PDF TO IMAGES UTILITY
+// PDF TO IMAGES
 // ============================================================================
 
 async function convertPdfToImages(file: File): Promise<PageData[]> {
     const pdfjs = await import('pdfjs-dist')
     const pdfjsLib = pdfjs.default || pdfjs
-
-    // Set worker path
     pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'
 
     const arrayBuffer = await file.arrayBuffer()
@@ -43,7 +46,7 @@ async function convertPdfToImages(file: File): Promise<PageData[]> {
 
     for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
         const page = await pdf.getPage(pageNum)
-        const scale = 2 // High quality
+        const scale = 2
         const viewport = page.getViewport({ scale })
 
         const canvas = document.createElement('canvas')
@@ -53,10 +56,18 @@ async function convertPdfToImages(file: File): Promise<PageData[]> {
         const ctx = canvas.getContext('2d')!
         await page.render({ canvasContext: ctx, viewport } as any).promise
 
+        const dataUrl = canvas.toDataURL('image/png')
+
+        // Pre-load image element
+        const img = new Image()
+        img.src = dataUrl
+        await new Promise(resolve => { img.onload = resolve })
+
         pages.push({
-            imageDataUrl: canvas.toDataURL('image/png'),
+            imageDataUrl: dataUrl,
             width: viewport.width,
-            height: viewport.height
+            height: viewport.height,
+            imageElement: img
         })
     }
 
@@ -73,13 +84,89 @@ async function convertImageToDataUrl(file: File): Promise<PageData> {
                 resolve({
                     imageDataUrl: reader.result as string,
                     width: img.width,
-                    height: img.height
+                    height: img.height,
+                    imageElement: img
                 })
             }
             img.src = reader.result as string
         }
         reader.readAsDataURL(file)
     })
+}
+
+// ============================================================================
+// CLIPPING FUNCTION
+// ============================================================================
+
+function clipSourceImage(source: Source, page: PageData): string | null {
+    if (!page.imageElement) return null
+
+    const canvas = document.createElement('canvas')
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return null
+
+    if (source.box) {
+        // Rectangle clipping
+        const sx = (source.box.x / 100) * page.width
+        const sy = (source.box.y / 100) * page.height
+        const sw = (source.box.width / 100) * page.width
+        const sh = (source.box.height / 100) * page.height
+
+        // Account for rotation by expanding canvas if needed
+        const angle = (source.rotation * Math.PI) / 180
+        const cos = Math.abs(Math.cos(angle))
+        const sin = Math.abs(Math.sin(angle))
+        const newW = sw * cos + sh * sin
+        const newH = sw * sin + sh * cos
+
+        canvas.width = newW
+        canvas.height = newH
+
+        ctx.save()
+        ctx.translate(newW / 2, newH / 2)
+        ctx.rotate(angle)
+        ctx.drawImage(page.imageElement, sx, sy, sw, sh, -sw / 2, -sh / 2, sw, sh)
+        ctx.restore()
+
+        return canvas.toDataURL('image/png')
+    } else if (source.polygon && source.polygon.length >= 3) {
+        // Polygon clipping
+        const points = source.polygon.map(p => ({
+            x: (p.x / 100) * page.width,
+            y: (p.y / 100) * page.height
+        }))
+
+        // Find bounding box
+        const minX = Math.min(...points.map(p => p.x))
+        const maxX = Math.max(...points.map(p => p.x))
+        const minY = Math.min(...points.map(p => p.y))
+        const maxY = Math.max(...points.map(p => p.y))
+
+        canvas.width = maxX - minX
+        canvas.height = maxY - minY
+
+        // Create clip path
+        ctx.beginPath()
+        ctx.moveTo(points[0].x - minX, points[0].y - minY)
+        for (let i = 1; i < points.length; i++) {
+            ctx.lineTo(points[i].x - minX, points[i].y - minY)
+        }
+        ctx.closePath()
+        ctx.clip()
+
+        // Apply rotation
+        const angle = (source.rotation * Math.PI) / 180
+        ctx.save()
+        ctx.translate(canvas.width / 2, canvas.height / 2)
+        ctx.rotate(angle)
+        ctx.translate(-canvas.width / 2, -canvas.height / 2)
+        ctx.drawImage(page.imageElement, minX, minY, maxX - minX, maxY - minY, 0, 0, maxX - minX, maxY - minY)
+        ctx.restore()
+
+        return canvas.toDataURL('image/png')
+    }
+
+    return null
 }
 
 // ============================================================================
@@ -96,18 +183,51 @@ export default function SourceManager() {
     const [statusMessage, setStatusMessage] = useState('')
     const [error, setError] = useState<string | null>(null)
 
-    // Drawing state
-    const [isDrawing, setIsDrawing] = useState(false)
-    const [drawStart, setDrawStart] = useState<{ x: number, y: number } | null>(null)
-    const [drawEnd, setDrawEnd] = useState<{ x: number, y: number } | null>(null)
+    // Drawing mode
+    const [drawMode, setDrawMode] = useState<DrawMode>('rectangle')
 
-    // Editing state (drag/resize)
+    // Rectangle drawing
+    const [isDrawing, setIsDrawing] = useState(false)
+    const [drawStart, setDrawStart] = useState<{ x: number; y: number } | null>(null)
+    const [drawEnd, setDrawEnd] = useState<{ x: number; y: number } | null>(null)
+
+    // Polygon drawing
+    const [polygonPoints, setPolygonPoints] = useState<Array<{ x: number; y: number }>>([])
+
+    // Editing
     const [editMode, setEditMode] = useState<'none' | 'drag' | 'resize'>('none')
     const [editingSourceId, setEditingSourceId] = useState<string | null>(null)
-    const [editStart, setEditStart] = useState<{ x: number, y: number, box: { x: number, y: number, width: number, height: number } } | null>(null)
+    const [editStart, setEditStart] = useState<{ x: number; y: number; box: { x: number; y: number; width: number; height: number } } | null>(null)
     const [resizeHandle, setResizeHandle] = useState<'nw' | 'ne' | 'sw' | 'se' | null>(null)
 
     const canvasRef = useRef<HTMLDivElement>(null)
+
+    // ============================================================================
+    // AUTO-GENERATE CLIPPED IMAGES when sources change
+    // ============================================================================
+    useEffect(() => {
+        const generateMissingClips = async () => {
+            const updated = sources.map(s => {
+                if (!s.clippedImage && (s.box || s.polygon)) {
+                    const page = pages[s.pageIndex]
+                    if (page) {
+                        return { ...s, clippedImage: clipSourceImage(s, page) }
+                    }
+                }
+                return s
+            })
+
+            // Only update if something changed
+            const hasChanges = updated.some((s, i) => s.clippedImage !== sources[i].clippedImage)
+            if (hasChanges) {
+                setSources(updated)
+            }
+        }
+
+        if (pages.length > 0 && sources.length > 0) {
+            generateMissingClips()
+        }
+    }, [sources, pages])
 
     // ============================================================================
     // FILE HANDLING
@@ -141,19 +261,15 @@ export default function SourceManager() {
                 allSources.push(...pageSources)
             }
 
+            // Generate clipped images for all sources immediately
+            for (const source of allSources) {
+                source.clippedImage = clipSourceImage(source, pageData[source.pageIndex])
+            }
+
             if (allSources.length === 0) {
                 setStatusMessage('No sources detected. Draw boxes manually.')
             } else {
-                setStatusMessage(`Found ${allSources.length} sources. Looking up in Sefaria...`)
-
-                // Enrich with Sefaria data
-                for (const source of allSources) {
-                    if (source.reference) {
-                        await enrichWithSefaria(source)
-                    }
-                }
-
-                setStatusMessage(`Done! Found ${allSources.length} sources.`)
+                setStatusMessage(`Found ${allSources.length} sources.`)
             }
 
             setSources(allSources)
@@ -173,7 +289,6 @@ export default function SourceManager() {
 
     const analyzePageWithGemini = async (page: PageData, pageIndex: number): Promise<Source[]> => {
         try {
-            // Convert data URL to blob
             const response = await fetch(page.imageDataUrl)
             const blob = await response.blob()
             const file = new File([blob], 'page.png', { type: 'image/png' })
@@ -201,8 +316,9 @@ export default function SourceManager() {
                     id: s.id || `source-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                     pageIndex,
                     box: s.box,
+                    polygon: null,
                     rotation: 0,
-                    clippedImage: null,  // Will be generated after
+                    clippedImage: null,
                     text: s.text || '',
                     reference: s.reference || null,
                     sefariaUrl: null,
@@ -217,65 +333,109 @@ export default function SourceManager() {
         }
     }
 
-    const enrichWithSefaria = async (source: Source) => {
-        if (!source.reference) return
+    // ============================================================================
+    // SOURCE MANAGEMENT
+    // ============================================================================
 
-        try {
-            const res = await fetch(`/api/sources/sefaria?ref=${encodeURIComponent(source.reference)}`)
-            const data = await res.json() as {
-                found: boolean
-                url?: string
-                he?: string
-                text?: string
-            }
+    const deleteSource = (id: string) => {
+        setSources(prev => prev.filter(s => s.id !== id))
+        if (selectedSourceId === id) setSelectedSourceId(null)
+    }
 
-            if (data.found) {
-                source.sefariaUrl = data.url || null
-                source.sefariaText = data.he || data.text || null
+    const updateSourceRotation = (id: string, rotation: number) => {
+        setSources(prev => prev.map(s => {
+            if (s.id === id) {
+                const updated = { ...s, rotation, clippedImage: null } // Clear image to regenerate
+                return updated
             }
-        } catch (err) {
-            console.error('Sefaria lookup failed:', err)
+            return s
+        }))
+    }
+
+    const updateSourceReference = (id: string, reference: string) => {
+        setSources(prev => prev.map(s =>
+            s.id === id ? { ...s, reference } : s
+        ))
+    }
+
+    const clearCurrentPage = () => {
+        setSources(prev => prev.filter(s => s.pageIndex !== currentPageIndex))
+        setSelectedSourceId(null)
+    }
+
+    const applyQuickGrid = (rows: number) => {
+        const newSources: Source[] = []
+        const rowHeight = 90 / rows
+
+        for (let i = 0; i < rows; i++) {
+            const source: Source = {
+                id: `grid-${currentPageIndex}-${i}-${Date.now()}`,
+                pageIndex: currentPageIndex,
+                box: { x: 5, y: 5 + (i * rowHeight), width: 90, height: rowHeight },
+                polygon: null,
+                rotation: 0,
+                clippedImage: null,
+                text: '',
+                reference: null,
+                sefariaUrl: null,
+                sefariaText: null
+            }
+            newSources.push(source)
         }
+
+        setSources(prev => [
+            ...prev.filter(s => s.pageIndex !== currentPageIndex),
+            ...newSources
+        ])
     }
 
     // ============================================================================
-    // DRAWING AND EDITING
+    // DRAWING HANDLERS
     // ============================================================================
 
-    const getRelativePosition = (e: React.MouseEvent<HTMLDivElement>, container?: HTMLDivElement | null) => {
-        const target = container || canvasRef.current
-        if (!target) return { x: 0, y: 0 }
-        const rect = target.getBoundingClientRect()
+    const getRelativePosition = (e: React.MouseEvent<HTMLDivElement>) => {
+        if (!canvasRef.current) return { x: 0, y: 0 }
+        const rect = canvasRef.current.getBoundingClientRect()
         return {
             x: Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100)),
             y: Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100))
         }
     }
 
-    // Start dragging a box
-    const startDrag = (e: React.MouseEvent<HTMLDivElement>, source: Source) => {
-        e.stopPropagation()
-        const pos = getRelativePosition(e)
-        setEditMode('drag')
-        setEditingSourceId(source.id)
-        setEditStart({ x: pos.x, y: pos.y, box: { ...source.box } })
-        setSelectedSourceId(source.id)
+    const handleCanvasClick = (e: React.MouseEvent<HTMLDivElement>) => {
+        if (drawMode === 'polygon' && appState === 'editing') {
+            const pos = getRelativePosition(e)
+            setPolygonPoints(prev => [...prev, pos])
+        }
     }
 
-    // Start resizing a box
-    const startResize = (e: React.MouseEvent<HTMLDivElement>, source: Source, handle: 'nw' | 'ne' | 'sw' | 'se') => {
-        e.stopPropagation()
-        const pos = getRelativePosition(e)
-        setEditMode('resize')
-        setEditingSourceId(source.id)
-        setResizeHandle(handle)
-        setEditStart({ x: pos.x, y: pos.y, box: { ...source.box } })
-        setSelectedSourceId(source.id)
+    const finishPolygon = () => {
+        if (polygonPoints.length >= 3) {
+            const newSource: Source = {
+                id: `polygon-${Date.now()}`,
+                pageIndex: currentPageIndex,
+                box: null,
+                polygon: [...polygonPoints],
+                rotation: 0,
+                clippedImage: null,
+                text: '',
+                reference: null,
+                sefariaUrl: null,
+                sefariaText: null
+            }
+            setSources(prev => [...prev, newSource])
+            setSelectedSourceId(newSource.id)
+        }
+        setPolygonPoints([])
+    }
+
+    const cancelPolygon = () => {
+        setPolygonPoints([])
     }
 
     const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-        if (appState !== 'editing') return
-        if (editMode !== 'none') return // Already editing
+        if (appState !== 'editing' || drawMode !== 'rectangle') return
+        if (editMode !== 'none') return
 
         const pos = getRelativePosition(e)
         setIsDrawing(true)
@@ -287,26 +447,24 @@ export default function SourceManager() {
     const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
         const pos = getRelativePosition(e)
 
-        // Handle box editing (drag/resize)
         if (editMode !== 'none' && editingSourceId && editStart) {
             const deltaX = pos.x - editStart.x
             const deltaY = pos.y - editStart.y
 
             setSources(prev => prev.map(s => {
-                if (s.id !== editingSourceId) return s
+                if (s.id !== editingSourceId || !s.box) return s
 
                 if (editMode === 'drag') {
-                    // Move the box
                     return {
                         ...s,
                         box: {
                             ...s.box,
                             x: Math.max(0, Math.min(100 - editStart.box.width, editStart.box.x + deltaX)),
                             y: Math.max(0, Math.min(100 - editStart.box.height, editStart.box.y + deltaY))
-                        }
+                        },
+                        clippedImage: null // Regenerate
                     }
                 } else if (editMode === 'resize' && resizeHandle) {
-                    // Resize the box based on which handle is being dragged
                     let newX = editStart.box.x
                     let newY = editStart.box.y
                     let newW = editStart.box.width
@@ -334,7 +492,8 @@ export default function SourceManager() {
                             y: Math.max(0, newY),
                             width: Math.max(5, Math.min(100 - newX, newW)),
                             height: Math.max(5, Math.min(100 - newY, newH))
-                        }
+                        },
+                        clippedImage: null
                     }
                 }
                 return s
@@ -342,14 +501,12 @@ export default function SourceManager() {
             return
         }
 
-        // Handle drawing new box
-        if (isDrawing) {
+        if (isDrawing && drawMode === 'rectangle') {
             setDrawEnd(pos)
         }
     }
 
     const handleMouseUp = () => {
-        // End editing
         if (editMode !== 'none') {
             setEditMode('none')
             setEditingSourceId(null)
@@ -358,7 +515,6 @@ export default function SourceManager() {
             return
         }
 
-        // End drawing
         if (!isDrawing || !drawStart || !drawEnd) {
             setIsDrawing(false)
             return
@@ -369,12 +525,12 @@ export default function SourceManager() {
         const width = Math.abs(drawEnd.x - drawStart.x)
         const height = Math.abs(drawEnd.y - drawStart.y)
 
-        // Only add if box is large enough
         if (width > 3 && height > 3) {
             const newSource: Source = {
-                id: `manual-${Date.now()}`,
+                id: `rect-${Date.now()}`,
                 pageIndex: currentPageIndex,
                 box: { x, y, width, height },
+                polygon: null,
                 rotation: 0,
                 clippedImage: null,
                 text: '',
@@ -391,198 +547,29 @@ export default function SourceManager() {
         setDrawEnd(null)
     }
 
-    // ============================================================================
-    // SOURCE MANAGEMENT
-    // ============================================================================
-
-    const deleteSource = (id: string) => {
-        setSources(prev => prev.filter(s => s.id !== id))
-        if (selectedSourceId === id) setSelectedSourceId(null)
+    const startDrag = (e: React.MouseEvent<HTMLDivElement>, source: Source) => {
+        if (!source.box) return
+        e.stopPropagation()
+        const pos = getRelativePosition(e)
+        setEditMode('drag')
+        setEditingSourceId(source.id)
+        setEditStart({ x: pos.x, y: pos.y, box: { ...source.box } })
+        setSelectedSourceId(source.id)
     }
 
-    const updateSourceReference = (id: string, reference: string) => {
-        setSources(prev => prev.map(s =>
-            s.id === id ? { ...s, reference } : s
-        ))
-    }
-
-    const lookupSource = async (source: Source) => {
-        if (!source.reference) return
-        setStatusMessage(`Looking up "${source.reference}"...`)
-        await enrichWithSefaria(source)
-        setSources([...sources]) // Trigger re-render
-        setStatusMessage('')
-    }
-
-    // Quick grid
-    const applyQuickGrid = (rows: number) => {
-        const newSources: Source[] = []
-        const rowHeight = 90 / rows
-
-        for (let i = 0; i < rows; i++) {
-            newSources.push({
-                id: `grid-${currentPageIndex}-${i}`,
-                pageIndex: currentPageIndex,
-                box: { x: 5, y: 5 + (i * rowHeight), width: 90, height: rowHeight },
-                rotation: 0,
-                clippedImage: null,
-                text: '',
-                reference: null,
-                sefariaUrl: null,
-                sefariaText: null
-            })
-        }
-
-        // Replace sources for current page only
-        setSources(prev => [
-            ...prev.filter(s => s.pageIndex !== currentPageIndex),
-            ...newSources
-        ])
-    }
-
-    const clearCurrentPage = () => {
-        setSources(prev => prev.filter(s => s.pageIndex !== currentPageIndex))
-        setSelectedSourceId(null)
-    }
-
-    // Clip image from source region
-    const clipSourceImage = (source: Source): string | null => {
-        const page = pages[source.pageIndex]
-        if (!page) return null
-
-        const img = new Image()
-        img.src = page.imageDataUrl
-
-        // Create canvas for clipping
-        const canvas = document.createElement('canvas')
-        const ctx = canvas.getContext('2d')
-        if (!ctx) return null
-
-        // Calculate pixel coordinates from percentages
-        const sx = (source.box.x / 100) * page.width
-        const sy = (source.box.y / 100) * page.height
-        const sw = (source.box.width / 100) * page.width
-        const sh = (source.box.height / 100) * page.height
-
-        canvas.width = sw
-        canvas.height = sh
-
-        // Handle rotation
-        if (source.rotation !== 0) {
-            ctx.save()
-            ctx.translate(canvas.width / 2, canvas.height / 2)
-            ctx.rotate((source.rotation * Math.PI) / 180)
-            ctx.translate(-canvas.width / 2, -canvas.height / 2)
-        }
-
-        ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh)
-
-        if (source.rotation !== 0) {
-            ctx.restore()
-        }
-
-        return canvas.toDataURL('image/png')
-    }
-
-    // Generate clipped images for all sources on current page
-    const generateClippedImages = () => {
-        setSources(prev => prev.map(s => {
-            if (s.pageIndex === currentPageIndex && !s.clippedImage) {
-                return { ...s, clippedImage: clipSourceImage(s) }
-            }
-            return s
-        }))
-    }
-
-    // Rotate a source
-    const rotateSource = (id: string, degrees: number) => {
-        setSources(prev => prev.map(s =>
-            s.id === id ? { ...s, rotation: (s.rotation + degrees) % 360 } : s
-        ))
-    }
-
-    // Clear OCR text from a source
-    const clearSourceOCR = (id: string) => {
-        setSources(prev => prev.map(s =>
-            s.id === id ? { ...s, text: '', reference: null, sefariaUrl: null, sefariaText: null } : s
-        ))
-    }
-
-    // OCR a specific source (call Gemini for just this region)
-    const ocrSource = async (source: Source) => {
-        if (!source.clippedImage) {
-            // Generate clipped image first
-            const clipped = clipSourceImage(source)
-            if (!clipped) return
-            source.clippedImage = clipped
-        }
-
-        setStatusMessage(`OCR'ing source...`)
-
-        try {
-            // Convert clipped image to blob
-            const response = await fetch(source.clippedImage)
-            const blob = await response.blob()
-            const file = new File([blob], 'source.png', { type: 'image/png' })
-
-            const formData = new FormData()
-            formData.append('image', file)
-
-            const res = await fetch('/api/sources/analyze', {
-                method: 'POST',
-                body: formData
-            })
-
-            const data = await res.json() as {
-                success: boolean
-                sources?: Array<{ text?: string; reference?: string | null }>
-            }
-
-            if (data.success && data.sources && data.sources.length > 0) {
-                const result = data.sources[0]
-                setSources(prev => prev.map(s =>
-                    s.id === source.id ? {
-                        ...s,
-                        text: result.text || '',
-                        reference: result.reference || null
-                    } : s
-                ))
-                setStatusMessage('OCR complete!')
-            } else {
-                setStatusMessage('OCR found no text')
-            }
-        } catch (err) {
-            console.error('OCR failed:', err)
-            setStatusMessage('OCR failed')
-        }
-
-        setTimeout(() => setStatusMessage(''), 2000)
-    }
-
-    const reanalyzeCurrentPage = async () => {
-        if (!pages[currentPageIndex]) return
-
-        setStatusMessage('Re-analyzing page with AI...')
-        const newSources = await analyzePageWithGemini(pages[currentPageIndex], currentPageIndex)
-
-        // Enrich with Sefaria
-        for (const source of newSources) {
-            if (source.reference) {
-                await enrichWithSefaria(source)
-            }
-        }
-
-        // Replace sources for current page
-        setSources(prev => [
-            ...prev.filter(s => s.pageIndex !== currentPageIndex),
-            ...newSources
-        ])
-
-        setStatusMessage(newSources.length > 0 ? `Found ${newSources.length} sources` : 'No sources detected')
+    const startResize = (e: React.MouseEvent<HTMLDivElement>, source: Source, handle: 'nw' | 'ne' | 'sw' | 'se') => {
+        if (!source.box) return
+        e.stopPropagation()
+        const pos = getRelativePosition(e)
+        setEditMode('resize')
+        setEditingSourceId(source.id)
+        setResizeHandle(handle)
+        setEditStart({ x: pos.x, y: pos.y, box: { ...source.box } })
+        setSelectedSourceId(source.id)
     }
 
     // ============================================================================
-    // HELPERS
+    // COMPUTED VALUES
     // ============================================================================
 
     const currentPageSources = sources.filter(s => s.pageIndex === currentPageIndex)
@@ -608,6 +595,42 @@ export default function SourceManager() {
 
                 {pages.length > 0 && (
                     <div className="flex items-center gap-3">
+                        {/* Draw Mode Toggle */}
+                        <div className="flex bg-slate-100 rounded-lg p-0.5">
+                            <button
+                                onClick={() => { setDrawMode('rectangle'); setPolygonPoints([]) }}
+                                className={`px-3 py-1 text-sm rounded ${drawMode === 'rectangle' ? 'bg-white shadow' : ''}`}
+                            >
+                                ▭ Rectangle
+                            </button>
+                            <button
+                                onClick={() => setDrawMode('polygon')}
+                                className={`px-3 py-1 text-sm rounded ${drawMode === 'polygon' ? 'bg-white shadow' : ''}`}
+                            >
+                                ⬡ Polygon
+                            </button>
+                        </div>
+
+                        {/* Polygon controls */}
+                        {drawMode === 'polygon' && polygonPoints.length > 0 && (
+                            <div className="flex gap-1">
+                                <span className="text-xs text-slate-500">{polygonPoints.length} points</span>
+                                <button
+                                    onClick={finishPolygon}
+                                    disabled={polygonPoints.length < 3}
+                                    className="px-2 py-0.5 text-xs bg-green-500 text-white rounded disabled:opacity-50"
+                                >
+                                    ✓ Finish
+                                </button>
+                                <button
+                                    onClick={cancelPolygon}
+                                    className="px-2 py-0.5 text-xs bg-red-500 text-white rounded"
+                                >
+                                    ✗ Cancel
+                                </button>
+                            </div>
+                        )}
+
                         {/* Page Navigation */}
                         <div className="flex items-center gap-2 bg-slate-100 rounded-lg px-3 py-1.5">
                             <button
@@ -629,7 +652,7 @@ export default function SourceManager() {
                             </button>
                         </div>
 
-                        {/* Quick Grid Dropdown */}
+                        {/* Quick Grid */}
                         <div className="relative group">
                             <button className="px-3 py-1.5 text-sm bg-slate-100 hover:bg-slate-200 rounded-lg">
                                 ⊞ Quick Grid
@@ -648,17 +671,10 @@ export default function SourceManager() {
                         </div>
 
                         <button
-                            onClick={reanalyzeCurrentPage}
-                            className="px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 rounded-lg"
-                        >
-                            🔄 Re-analyze
-                        </button>
-
-                        <button
                             onClick={clearCurrentPage}
                             className="px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg"
                         >
-                            🗑 Clear Page
+                            🗑 Clear
                         </button>
 
                         {/* View Toggle */}
@@ -676,10 +692,6 @@ export default function SourceManager() {
                                 👁 Preview
                             </button>
                         </div>
-
-                        <span className="text-sm text-slate-500">
-                            {sources.length} sources total
-                        </span>
                     </div>
                 )}
             </header>
@@ -703,12 +715,7 @@ export default function SourceManager() {
                             <div className="text-5xl mb-4">📄</div>
                             <h2 className="text-xl font-semibold text-slate-800 mb-2">Upload Source Sheet</h2>
                             <p className="text-slate-500 mb-4">PDF or Image file</p>
-                            <p className="text-sm text-blue-600">
-                                ✨ AI auto-detects sources + OCR + Sefaria lookup
-                            </p>
-                            {error && (
-                                <p className="mt-4 text-red-600 text-sm">{error}</p>
-                            )}
+                            {error && <p className="text-red-600 text-sm">{error}</p>}
                             <input
                                 id="file-upload"
                                 type="file"
@@ -729,7 +736,6 @@ export default function SourceManager() {
                         <div className="text-center">
                             <div className="text-5xl mb-4 animate-bounce">🔍</div>
                             <p className="text-lg font-medium text-slate-700">{statusMessage}</p>
-                            <p className="text-sm text-slate-500 mt-2">This may take a moment...</p>
                         </div>
                     </div>
                 )}
@@ -737,11 +743,12 @@ export default function SourceManager() {
                 {/* EDITING STATE */}
                 {appState === 'editing' && pages.length > 0 && (
                     <>
-                        {/* Canvas Area */}
+                        {/* Canvas */}
                         <div className="flex-1 overflow-auto p-6 flex justify-center">
                             <div
                                 ref={canvasRef}
-                                className="relative inline-block cursor-crosshair"
+                                className={`relative inline-block select-none ${drawMode === 'polygon' ? 'cursor-crosshair' : 'cursor-crosshair'}`}
+                                onClick={handleCanvasClick}
                                 onMouseDown={handleMouseDown}
                                 onMouseMove={handleMouseMove}
                                 onMouseUp={handleMouseUp}
@@ -750,121 +757,80 @@ export default function SourceManager() {
                                 <img
                                     src={pages[currentPageIndex].imageDataUrl}
                                     alt={`Page ${currentPageIndex + 1}`}
-                                    className="max-h-[calc(100vh-120px)] shadow-xl rounded-lg select-none pointer-events-none"
+                                    className="max-h-[calc(100vh-120px)] shadow-xl rounded-lg pointer-events-none"
                                     draggable={false}
                                 />
 
                                 {/* Source Boxes */}
-                                {currentPageSources.map((source, idx) => (
-                                    <div
-                                        key={source.id}
-                                        onClick={(e) => {
-                                            e.stopPropagation()
-                                            setSelectedSourceId(source.id)
-                                        }}
-                                        className={`absolute border-2 transition-all group ${selectedSourceId === source.id
-                                            ? 'border-green-500 bg-green-500/20 shadow-lg z-20'
-                                            : source.sefariaUrl
-                                                ? 'border-purple-500 bg-purple-500/10 hover:bg-purple-500/20'
-                                                : 'border-blue-500 bg-blue-500/10 hover:bg-blue-500/20'
-                                            }`}
-                                        style={{
-                                            left: `${source.box.x}%`,
-                                            top: `${source.box.y}%`,
-                                            width: `${source.box.width}%`,
-                                            height: `${source.box.height}%`,
-                                            transform: source.rotation ? `rotate(${source.rotation}deg)` : undefined,
-                                            transformOrigin: 'center center'
-                                        }}
-                                    >
-                                        {/* Source Number Badge */}
-                                        <span className="absolute -top-2.5 -left-2.5 w-5 h-5 bg-blue-600 text-white text-xs font-bold rounded-full flex items-center justify-center shadow z-10">
-                                            {idx + 1}
-                                        </span>
+                                {currentPageSources.map((source, idx) => {
+                                    if (source.box) {
+                                        return (
+                                            <div
+                                                key={source.id}
+                                                onClick={(e) => { e.stopPropagation(); setSelectedSourceId(source.id) }}
+                                                className={`absolute border-2 transition-all group ${selectedSourceId === source.id
+                                                    ? 'border-green-500 bg-green-500/20 shadow-lg z-20'
+                                                    : 'border-blue-500 bg-blue-500/10 hover:bg-blue-500/20'
+                                                    }`}
+                                                style={{
+                                                    left: `${source.box.x}%`,
+                                                    top: `${source.box.y}%`,
+                                                    width: `${source.box.width}%`,
+                                                    height: `${source.box.height}%`,
+                                                    transform: source.rotation ? `rotate(${source.rotation}deg)` : undefined,
+                                                    transformOrigin: 'center center'
+                                                }}
+                                            >
+                                                {/* Number */}
+                                                <span className="absolute -top-3 -left-3 w-6 h-6 bg-blue-600 text-white text-xs font-bold rounded-full flex items-center justify-center shadow z-10">
+                                                    {idx + 1}
+                                                </span>
 
-                                        {/* Rotation indicator */}
-                                        {source.rotation !== 0 && (
-                                            <span className="absolute -top-2.5 left-4 w-5 h-5 bg-orange-500 text-white text-[8px] rounded-full flex items-center justify-center shadow z-10">
-                                                {source.rotation}°
-                                            </span>
-                                        )}
+                                                {/* Delete */}
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); deleteSource(source.id) }}
+                                                    className="absolute -top-3 -right-3 w-6 h-6 bg-red-500 hover:bg-red-600 text-white rounded-full shadow z-20"
+                                                >
+                                                    ×
+                                                </button>
 
-                                        {/* Sefaria Badge */}
-                                        {source.sefariaUrl && (
-                                            <span className="absolute -top-2.5 left-10 w-5 h-5 bg-purple-600 text-white text-xs rounded-full flex items-center justify-center shadow z-10">
-                                                ✓
-                                            </span>
-                                        )}
+                                                {/* Drag area */}
+                                                <div
+                                                    onMouseDown={(e) => startDrag(e, source)}
+                                                    className="absolute inset-4 cursor-move"
+                                                />
 
-                                        {/* DELETE BUTTON */}
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation()
-                                                deleteSource(source.id)
-                                            }}
-                                            className="absolute -top-2.5 -right-2.5 w-6 h-6 bg-red-500 hover:bg-red-600 text-white text-sm font-bold rounded-full shadow-lg flex items-center justify-center z-20 transition-colors"
-                                            title="Delete source"
-                                        >
-                                            ×
-                                        </button>
+                                                {/* Resize handles */}
+                                                <div onMouseDown={(e) => startResize(e, source, 'nw')} className="absolute -top-1. -left-1.5 w-3 h-3 bg-blue-600 cursor-nw-resize rounded-sm" />
+                                                <div onMouseDown={(e) => startResize(e, source, 'ne')} className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-blue-600 cursor-ne-resize rounded-sm" />
+                                                <div onMouseDown={(e) => startResize(e, source, 'sw')} className="absolute -bottom-1.5 -left-1.5 w-3 h-3 bg-blue-600 cursor-sw-resize rounded-sm" />
+                                                <div onMouseDown={(e) => startResize(e, source, 'se')} className="absolute -bottom-1.5 -right-1.5 w-3 h-3 bg-blue-600 cursor-se-resize rounded-sm" />
+                                            </div>
+                                        )
+                                    } else if (source.polygon) {
+                                        // Render polygon as SVG overlay
+                                        const points = source.polygon.map(p => `${p.x}%,${p.y}%`).join(' ')
+                                        return (
+                                            <svg
+                                                key={source.id}
+                                                className="absolute inset-0 w-full h-full pointer-events-none"
+                                                style={{ transform: source.rotation ? `rotate(${source.rotation}deg)` : undefined }}
+                                            >
+                                                <polygon
+                                                    points={source.polygon.map(p => `${p.x}%,${p.y}%`).join(' ')}
+                                                    fill={selectedSourceId === source.id ? 'rgba(34, 197, 94, 0.2)' : 'rgba(59, 130, 246, 0.1)'}
+                                                    stroke={selectedSourceId === source.id ? '#22c55e' : '#3b82f6'}
+                                                    strokeWidth="2"
+                                                    className="cursor-pointer pointer-events-auto"
+                                                    onClick={(e) => { e.stopPropagation(); setSelectedSourceId(source.id) }}
+                                                />
+                                            </svg>
+                                        )
+                                    }
+                                    return null
+                                })}
 
-                                        {/* ROTATE BUTTONS */}
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation()
-                                                rotateSource(source.id, -90)
-                                            }}
-                                            className="absolute -bottom-2.5 left-1/2 -translate-x-6 w-5 h-5 bg-orange-500 hover:bg-orange-600 text-white text-xs rounded-full shadow flex items-center justify-center z-20"
-                                            title="Rotate left 90°"
-                                        >
-                                            ↶
-                                        </button>
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation()
-                                                rotateSource(source.id, 90)
-                                            }}
-                                            className="absolute -bottom-2.5 left-1/2 translate-x-1 w-5 h-5 bg-orange-500 hover:bg-orange-600 text-white text-xs rounded-full shadow flex items-center justify-center z-20"
-                                            title="Rotate right 90°"
-                                        >
-                                            ↷
-                                        </button>
-
-                                        {/* DRAG AREA - Center of box */}
-                                        <div
-                                            onMouseDown={(e) => startDrag(e, source)}
-                                            className="absolute inset-4 cursor-move flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                                        >
-                                            <span className="bg-white/80 px-2 py-1 rounded text-xs text-slate-600 shadow pointer-events-none">
-                                                Drag to move
-                                            </span>
-                                        </div>
-
-                                        {/* RESIZE HANDLES - Corners */}
-                                        {/* NW */}
-                                        <div
-                                            onMouseDown={(e) => startResize(e, source, 'nw')}
-                                            className="absolute -top-1 -left-1 w-3 h-3 bg-blue-600 hover:bg-blue-700 cursor-nw-resize rounded-sm shadow"
-                                        />
-                                        {/* NE */}
-                                        <div
-                                            onMouseDown={(e) => startResize(e, source, 'ne')}
-                                            className="absolute -top-1 -right-1 w-3 h-3 bg-blue-600 hover:bg-blue-700 cursor-ne-resize rounded-sm shadow"
-                                        />
-                                        {/* SW */}
-                                        <div
-                                            onMouseDown={(e) => startResize(e, source, 'sw')}
-                                            className="absolute -bottom-1 -left-1 w-3 h-3 bg-blue-600 hover:bg-blue-700 cursor-sw-resize rounded-sm shadow"
-                                        />
-                                        {/* SE */}
-                                        <div
-                                            onMouseDown={(e) => startResize(e, source, 'se')}
-                                            className="absolute -bottom-1 -right-1 w-3 h-3 bg-blue-600 hover:bg-blue-700 cursor-se-resize rounded-sm shadow"
-                                        />
-                                    </div>
-                                ))}
-
-                                {/* Drawing Preview */}
+                                {/* Drawing preview - Rectangle */}
                                 {isDrawing && drawStart && drawEnd && (
                                     <div
                                         className="absolute border-2 border-blue-600 bg-blue-500/30 pointer-events-none"
@@ -876,26 +842,39 @@ export default function SourceManager() {
                                         }}
                                     />
                                 )}
+
+                                {/* Drawing preview - Polygon */}
+                                {polygonPoints.length > 0 && (
+                                    <svg className="absolute inset-0 w-full h-full pointer-events-none">
+                                        {polygonPoints.map((p, i) => (
+                                            <circle key={i} cx={`${p.x}%`} cy={`${p.y}%`} r="5" fill="#3b82f6" />
+                                        ))}
+                                        {polygonPoints.length > 1 && (
+                                            <polyline
+                                                points={polygonPoints.map(p => `${p.x}%,${p.y}%`).join(' ')}
+                                                fill="none"
+                                                stroke="#3b82f6"
+                                                strokeWidth="2"
+                                                strokeDasharray="5,5"
+                                            />
+                                        )}
+                                    </svg>
+                                )}
                             </div>
                         </div>
 
                         {/* Sidebar */}
-                        <aside className="w-80 bg-white border-l flex flex-col">
+                        <aside className="w-96 bg-white border-l flex flex-col">
                             <div className="p-4 border-b bg-slate-50">
                                 <h2 className="font-semibold text-slate-800">
-                                    Sources on this page ({currentPageSources.length})
+                                    Sources ({currentPageSources.length})
                                 </h2>
-                                <p className="text-xs text-slate-500 mt-1">
-                                    Click a box to select • Draw to add new
-                                </p>
                             </div>
 
                             <div className="flex-1 overflow-auto">
                                 {currentPageSources.length === 0 ? (
                                     <div className="p-6 text-center text-slate-400">
-                                        <p className="text-3xl mb-2">📦</p>
-                                        <p>No sources on this page</p>
-                                        <p className="text-xs mt-1">Draw boxes or use Quick Grid</p>
+                                        <p>Draw boxes or polygons to clip sources</p>
                                     </div>
                                 ) : (
                                     <div className="divide-y">
@@ -903,124 +882,76 @@ export default function SourceManager() {
                                             <div
                                                 key={source.id}
                                                 onClick={() => setSelectedSourceId(source.id)}
-                                                className={`p-3 cursor-pointer transition-colors ${selectedSourceId === source.id ? 'bg-blue-50' : 'hover:bg-slate-50'
-                                                    }`}
+                                                className={`p-3 cursor-pointer ${selectedSourceId === source.id ? 'bg-blue-50' : 'hover:bg-slate-50'}`}
                                             >
-                                                {/* Header with number and reference */}
+                                                {/* Header */}
                                                 <div className="flex items-center justify-between mb-2">
                                                     <div className="flex items-center gap-2">
-                                                        <span className="w-5 h-5 bg-blue-600 text-white text-xs font-bold rounded-full flex items-center justify-center">
+                                                        <span className="w-6 h-6 bg-blue-600 text-white text-xs font-bold rounded-full flex items-center justify-center">
                                                             {idx + 1}
                                                         </span>
-                                                        <span className="font-medium text-slate-800 text-sm truncate max-w-[150px]">
-                                                            {source.reference || 'Untitled'}
+                                                        <span className="text-xs text-slate-500">
+                                                            {source.polygon ? 'Polygon' : 'Rectangle'}
                                                         </span>
-                                                        {source.rotation !== 0 && (
-                                                            <span className="text-[10px] text-orange-500">({source.rotation}°)</span>
-                                                        )}
                                                     </div>
-                                                    <div className="flex items-center gap-1">
-                                                        {source.sefariaUrl && (
-                                                            <a
-                                                                href={source.sefariaUrl}
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
-                                                                onClick={(e) => e.stopPropagation()}
-                                                                className="text-purple-600 text-xs hover:underline"
-                                                            >
-                                                                Sefaria ↗
-                                                            </a>
-                                                        )}
-                                                        <button
-                                                            onClick={(e) => { e.stopPropagation(); deleteSource(source.id); }}
-                                                            className="w-5 h-5 text-red-500 hover:bg-red-100 rounded flex items-center justify-center text-xs"
-                                                            title="Delete"
-                                                        >
-                                                            ×
-                                                        </button>
-                                                    </div>
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); deleteSource(source.id) }}
+                                                        className="text-red-500 hover:bg-red-100 rounded p-1"
+                                                    >
+                                                        ×
+                                                    </button>
                                                 </div>
 
-                                                {/* CLIPPED IMAGE PREVIEW */}
-                                                <div className="bg-slate-100 rounded-lg overflow-hidden mb-2 relative">
-                                                    {source.clippedImage ? (
+                                                {/* CLIPPED IMAGE - Auto generated */}
+                                                {source.clippedImage && (
+                                                    <div className="bg-slate-100 rounded overflow-hidden mb-2">
                                                         <img
                                                             src={source.clippedImage}
                                                             alt={`Source ${idx + 1}`}
-                                                            className="w-full max-h-32 object-contain"
-                                                            style={{ transform: source.rotation ? `rotate(${source.rotation}deg)` : undefined }}
+                                                            className="w-full max-h-40 object-contain"
                                                         />
-                                                    ) : (
-                                                        <div className="h-20 flex items-center justify-center text-slate-400 text-xs">
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation()
-                                                                    const clipped = clipSourceImage(source)
-                                                                    if (clipped) {
-                                                                        setSources(prev => prev.map(s =>
-                                                                            s.id === source.id ? { ...s, clippedImage: clipped } : s
-                                                                        ))
-                                                                    }
-                                                                }}
-                                                                className="px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
-                                                            >
-                                                                📷 Generate Preview
-                                                            </button>
-                                                        </div>
-                                                    )}
-                                                </div>
-
-                                                {/* OCR TEXT (if available) */}
-                                                {source.text && (
-                                                    <div className="bg-amber-50 rounded p-2 mb-2">
-                                                        <div className="flex items-center justify-between mb-1">
-                                                            <span className="text-[10px] text-amber-700 font-medium">OCR Text:</span>
-                                                            <button
-                                                                onClick={(e) => { e.stopPropagation(); clearSourceOCR(source.id); }}
-                                                                className="text-[10px] text-red-500 hover:underline"
-                                                            >
-                                                                Clear OCR
-                                                            </button>
-                                                        </div>
-                                                        <p className="text-xs text-slate-700 line-clamp-3 leading-relaxed" dir="rtl">
-                                                            {source.text}
-                                                        </p>
                                                     </div>
                                                 )}
 
-                                                {/* OCR BUTTON (if no text yet) */}
-                                                {!source.text && (
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); ocrSource(source); }}
-                                                        className="w-full py-1.5 bg-green-100 text-green-700 rounded text-xs hover:bg-green-200 flex items-center justify-center gap-1"
-                                                    >
-                                                        🔍 OCR this source
-                                                    </button>
-                                                )}
+                                                {/* ROTATION SLIDER */}
+                                                <div className="mb-2">
+                                                    <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
+                                                        <span>Rotation</span>
+                                                        <span className="font-mono">{source.rotation}°</span>
+                                                    </div>
+                                                    <input
+                                                        type="range"
+                                                        min="-180"
+                                                        max="180"
+                                                        step="1"
+                                                        value={source.rotation}
+                                                        onChange={(e) => updateSourceRotation(source.id, parseInt(e.target.value))}
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"
+                                                    />
+                                                    <div className="flex justify-between text-[10px] text-slate-400">
+                                                        <span>-180°</span>
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); updateSourceRotation(source.id, 0) }}
+                                                            className="text-blue-500 hover:underline"
+                                                        >
+                                                            Reset
+                                                        </button>
+                                                        <span>180°</span>
+                                                    </div>
+                                                </div>
 
-                                                {/* Edit reference input (when selected) */}
+                                                {/* Reference input */}
                                                 {selectedSourceId === source.id && (
                                                     <div className="mt-2 pt-2 border-t">
-                                                        <label className="text-[10px] font-medium text-slate-500 block mb-1">
-                                                            Reference:
-                                                        </label>
-                                                        <div className="flex gap-1">
-                                                            <input
-                                                                type="text"
-                                                                value={source.reference || ''}
-                                                                onChange={(e) => updateSourceReference(source.id, e.target.value)}
-                                                                placeholder="e.g., Bereishit 1:1"
-                                                                onClick={(e) => e.stopPropagation()}
-                                                                className="flex-1 text-xs px-2 py-1 border rounded"
-                                                            />
-                                                            <button
-                                                                onClick={(e) => { e.stopPropagation(); lookupSource(source); }}
-                                                                disabled={!source.reference}
-                                                                className="px-2 py-1 text-xs bg-purple-100 text-purple-700 rounded hover:bg-purple-200 disabled:opacity-50"
-                                                            >
-                                                                🔍
-                                                            </button>
-                                                        </div>
+                                                        <input
+                                                            type="text"
+                                                            value={source.reference || ''}
+                                                            onChange={(e) => updateSourceReference(source.id, e.target.value)}
+                                                            placeholder="Reference (e.g., Bereishit 1:1)"
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            className="w-full text-xs px-2 py-1 border rounded"
+                                                        />
                                                     </div>
                                                 )}
                                             </div>
@@ -1032,10 +963,10 @@ export default function SourceManager() {
                     </>
                 )}
 
-                {/* PREVIEW STATE */}
+                {/* PREVIEW STATE - Shows IMAGES not text */}
                 {appState === 'preview' && (
                     <div className="flex-1 overflow-auto p-8 bg-white">
-                        <div className="max-w-3xl mx-auto">
+                        <div className="max-w-4xl mx-auto">
                             <h1 className="text-3xl font-serif font-bold text-center mb-8 pb-4 border-b">
                                 Source Sheet
                             </h1>
@@ -1043,42 +974,49 @@ export default function SourceManager() {
                             {sources.length === 0 ? (
                                 <p className="text-center text-slate-400 py-12">No sources to display</p>
                             ) : (
-                                sources.map((source, idx) => (
-                                    <div key={source.id} className="mb-8 pb-8 border-b last:border-0">
-                                        <div className="flex items-baseline gap-3 mb-3">
-                                            <span className="text-2xl font-bold text-blue-600">{idx + 1}.</span>
-                                            {source.reference && (
-                                                <span className="text-xl font-semibold">{source.reference}</span>
-                                            )}
-                                            {source.sefariaUrl && (
-                                                <a
-                                                    href={source.sefariaUrl}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="text-sm text-purple-600 hover:underline"
-                                                >
-                                                    View on Sefaria →
-                                                </a>
-                                            )}
-                                        </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    {sources.map((source, idx) => (
+                                        <div key={source.id} className="border rounded-lg overflow-hidden shadow-sm">
+                                            {/* Source number and reference */}
+                                            <div className="bg-slate-50 px-4 py-2 flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="w-6 h-6 bg-blue-600 text-white text-xs font-bold rounded-full flex items-center justify-center">
+                                                        {idx + 1}
+                                                    </span>
+                                                    {source.reference && (
+                                                        <span className="font-medium text-sm">{source.reference}</span>
+                                                    )}
+                                                </div>
+                                                <span className="text-xs text-slate-400">
+                                                    Page {source.pageIndex + 1}
+                                                </span>
+                                            </div>
 
-                                        <div className="bg-slate-50 rounded-lg p-4" dir="rtl">
-                                            <p className="text-lg leading-relaxed font-serif">
-                                                {source.sefariaText || source.text || '(No text)'}
-                                            </p>
+                                            {/* CLIPPED IMAGE - Primary content */}
+                                            {source.clippedImage ? (
+                                                <img
+                                                    src={source.clippedImage}
+                                                    alt={`Source ${idx + 1}`}
+                                                    className="w-full"
+                                                />
+                                            ) : (
+                                                <div className="h-32 flex items-center justify-center text-slate-400 bg-slate-100">
+                                                    No preview
+                                                </div>
+                                            )}
                                         </div>
-                                    </div>
-                                ))
+                                    ))}
+                                </div>
                             )}
                         </div>
                     </div>
                 )}
             </div>
 
-            {/* FOOTER HINT */}
-            {appState === 'editing' && currentPageSources.length === 0 && (
+            {/* Drawing mode hint */}
+            {appState === 'editing' && drawMode === 'polygon' && polygonPoints.length === 0 && (
                 <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-black/75 text-white px-6 py-3 rounded-full text-sm">
-                    ✏️ Draw rectangles around each source, or use Quick Grid above
+                    Click to add points, then click "Finish" to complete the polygon
                 </div>
             )}
         </div>
