@@ -324,9 +324,13 @@ export default function SourceManager() {
         // Use the image element directly for accurate positioning
         if (!imageRef.current) return { x: 0, y: 0 }
         const rect = imageRef.current.getBoundingClientRect()
+        // clientX/clientY are relative to viewport - rect is also relative to viewport
+        // This should work correctly even with scrolling
+        const x = ((e.clientX - rect.left) / rect.width) * 100
+        const y = ((e.clientY - rect.top) / rect.height) * 100
         return {
-            x: Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100)),
-            y: Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100))
+            x: Math.max(0, Math.min(100, x)),
+            y: Math.max(0, Math.min(100, y))
         }
     }
 
@@ -680,10 +684,10 @@ export default function SourceManager() {
                 {/* EDITING */}
                 {appState === 'editing' && pages.length > 0 && (
                     <>
-                        <div className="flex-1 overflow-auto p-4 flex justify-center">
+                        <div className="flex-1 overflow-auto p-4 flex justify-center items-start">
                             <div
                                 ref={canvasRef}
-                                className="relative inline-block cursor-crosshair select-none"
+                                className="relative inline-flex cursor-crosshair select-none"
                                 style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
                                 onClick={handleCanvasClick}
                                 onMouseDown={handleMouseDown}
@@ -691,9 +695,15 @@ export default function SourceManager() {
                                 onMouseUp={handleMouseUp}
                                 onMouseLeave={handleMouseUp}
                             >
-                                <img ref={imageRef} src={pages[currentPageIndex].imageDataUrl} alt="Page" className="max-h-[calc(100vh-100px)] shadow-xl rounded-lg pointer-events-none select-none" draggable={false} />
+                                <img
+                                    ref={imageRef}
+                                    src={pages[currentPageIndex].imageDataUrl}
+                                    alt="Page"
+                                    className="max-h-[calc(100vh-100px)] shadow-xl rounded-lg pointer-events-none select-none block"
+                                    draggable={false}
+                                />
 
-                                {/* Render sources */}
+                                {/* Render sources - overlay on same coordinate system as image */}
                                 {currentPageSources.map((source, idx) => {
                                     if (source.box) {
                                         const isSelected = selectedSourceId === source.id
@@ -770,12 +780,12 @@ export default function SourceManager() {
                                                 points={polygonPoints.map(p => `${p.x}%,${p.y}%`).join(' ')}
                                                 fill="none"
                                                 stroke="#3b82f6"
-                                                strokeWidth="3"
+                                                strokeWidth="1"
                                             />
                                         )}
                                         {/* Points */}
                                         {polygonPoints.map((p, i) => (
-                                            <circle key={i} cx={`${p.x}%`} cy={`${p.y}%`} r="6" fill="#3b82f6" stroke="white" strokeWidth="2" />
+                                            <circle key={i} cx={`${p.x}%`} cy={`${p.y}%`} r="4" fill="#3b82f6" stroke="white" strokeWidth="1" />
                                         ))}
                                         {/* Closing line preview */}
                                         {polygonPoints.length >= 3 && (

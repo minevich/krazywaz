@@ -11,6 +11,7 @@ interface Shiur {
   blurb?: string | null
   audioUrl?: string
   sourceDoc?: string | null
+  sourcesJson?: string | null
   pubDate?: string
   duration?: string | null
   link?: string | null
@@ -42,6 +43,7 @@ export default function ShiurForm({ shiur, onSuccess, onCancel }: ShiurFormProps
     blurb: shiur?.blurb || '',
     audioUrl: shiur?.audioUrl || '',
     sourceDoc: shiur?.sourceDoc || '',
+    sourcesJson: (shiur as any)?.sourcesJson || '',
     pubDate: shiur?.pubDate ? new Date(shiur.pubDate).toISOString().split('T')[0] : '',
     duration: shiur?.duration || '',
     link: shiur?.link || '',
@@ -73,6 +75,7 @@ export default function ShiurForm({ shiur, onSuccess, onCancel }: ShiurFormProps
         blurb: formData.blurb || undefined,
         audioUrl: formData.audioUrl,
         sourceDoc: formData.sourceDoc || undefined,
+        sourcesJson: formData.sourcesJson || undefined,
         pubDate: formData.pubDate || new Date().toISOString(),
         duration: formData.duration || undefined,
         link: formData.link || undefined,
@@ -223,14 +226,41 @@ export default function ShiurForm({ shiur, onSuccess, onCancel }: ShiurFormProps
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Source Doc
+              Source Doc (PDF URL)
             </label>
             <input
               type="url"
               value={formData.sourceDoc}
               onChange={(e) => setFormData({ ...formData, sourceDoc: e.target.value })}
+              placeholder="https://drive.google.com/..."
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
             />
+            <p className="text-xs text-gray-500 mt-1">Original PDF link (Google Drive, etc.)</p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Clipped Sources (JSON)
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={formData.sourcesJson ? '✓ Has clipped sources' : ''}
+                readOnly
+                placeholder="No clipped sources (use Source Manager)"
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500"
+              />
+              {formData.sourcesJson && (
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, sourcesJson: '' })}
+                  className="px-3 py-2 text-red-600 border border-red-200 rounded-lg hover:bg-red-50"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            <p className="text-xs text-gray-500 mt-1">Clipped sources are created in the Source Manager</p>
           </div>
 
           <div>
