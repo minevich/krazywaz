@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { formatDate, formatDuration } from '@/lib/utils'
+import { formatDate, formatDuration, getShiurUrl } from '@/lib/utils'
 import Header from '@/components/Header'
 import PlayButton from '@/components/PlayButton'
 import PlatformGrid from '@/components/PlatformGrid'
@@ -86,7 +86,7 @@ export default async function Home() {
                 <div className="p-5 flex-1 flex flex-col">
                   <div className="flex items-start justify-between gap-4 mb-3">
                     <h3 className="font-serif text-xl font-semibold text-primary line-clamp-2 group-hover:text-secondary transition-colors">
-                      <Link href={shiur.slug ? `/${shiur.slug}` : `/shiur/${shiur.id}`}>{shiur.title}</Link>
+                      <Link href={getShiurUrl(shiur)}>{shiur.title}</Link>
                     </h3>
                   </div>
                   <div className="flex items-center gap-4 text-xs text-muted-foreground mb-4">
@@ -110,7 +110,7 @@ export default async function Home() {
                     <PlayButton shiur={shiur} />
                     <Link
                       className="flex items-center gap-1 text-sm text-secondary hover:text-primary font-medium"
-                      href={shiur.slug ? `/${shiur.slug}` : `/shiur/${shiur.id}`}
+                      href={getShiurUrl(shiur)}
                     >
                       Details <Info className="w-4 h-4" />
                     </Link>

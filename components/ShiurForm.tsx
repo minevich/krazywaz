@@ -37,7 +37,7 @@ interface ShiurFormProps {
 export default function ShiurForm({ shiur, onSuccess, onCancel }: ShiurFormProps) {
   const [formData, setFormData] = useState({
     guid: shiur?.guid || '',
-    slug: shiur?.slug || '',
+    slug: shiur?.slug || ((shiur?.id && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(shiur.id)) ? shiur.id : '') || '',
     title: shiur?.title || '',
     description: shiur?.description || '',
     blurb: shiur?.blurb || '',
@@ -101,7 +101,7 @@ export default function ShiurForm({ shiur, onSuccess, onCancel }: ShiurFormProps
         body: JSON.stringify(payload),
       })
 
-      const data = await response.json() as { error?: string; newId?: string }
+      const data = await response.json() as { error?: string; newId?: string; slug?: string }
 
       if (!response.ok) {
         setError(data.error || 'Error saving shiur')
@@ -109,9 +109,23 @@ export default function ShiurForm({ shiur, onSuccess, onCancel }: ShiurFormProps
       }
 
       // If the ID was changed to a slug, redirect to the new URL
-      if (data.newId) {
-        window.location.href = `/admin?edit=${data.newId}`
-        return
+      const finalId = data.newId || shiur?.id;
+      const finalSlug = data.slug || formData.slug;
+
+      if (finalId) {
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(finalId);
+        let redirectPath = '';
+
+        if (finalSlug && !isUuid) { // If there's a slug and the ID isn't a UUID (meaning ID is the slug)
+          redirectPath = `/${finalSlug}`;
+        } else if (finalSlug) { // If there's a slug and the ID is a UUID
+          redirectPath = `/${finalSlug}`; // Assuming slug takes precedence for display URL
+        } else { // No slug, use the ID
+          redirectPath = `/shiur/${finalId}`;
+        }
+        window.location.href = `/admin?edit=${finalId}`; // Keep admin edit view for now
+        // window.location.href = redirectPath; // This would redirect to the public view
+        return;
       }
 
       onSuccess()

@@ -21,20 +21,20 @@ export function formatDate(date: Date | string): string {
 
 export function extractYouTubeVideoId(url: string | null | undefined): string | null {
   if (!url) return null
-  
+
   // Match various YouTube URL formats
   const patterns = [
     /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
     /youtube\.com\/.*[?&]v=([^&\n?#]+)/,
   ]
-  
+
   for (const pattern of patterns) {
     const match = url.match(pattern)
     if (match && match[1]) {
       return match[1]
     }
   }
-  
+
   return null
 }
 
@@ -44,3 +44,8 @@ export function getYouTubeThumbnail(videoId: string | null): string | null {
   return `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`
 }
 
+export function getShiurUrl(shiur: { id: string, slug: string | null }): string {
+  if (shiur.slug) return `/${shiur.slug}`
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(shiur.id)
+  return isUuid ? `/shiur/${shiur.id}` : `/${shiur.id}`
+}
