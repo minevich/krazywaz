@@ -1,90 +1,81 @@
 'use client'
 
-import { ExternalLink, ChevronDown, ChevronUp, FileText } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
+import { ChevronDown, ChevronUp, ExternalLink } from 'lucide-react'
 
-interface SourceSheetViewerProps {
-    sourceDoc?: string | null  // PDF URL
-    sourcesJson?: string | null  // Clipped sources JSON
-    title: string
-}
-
-interface SourceData {
+// Define source types based on what we're actually storing
+interface ExtractedSource {
     id: string
     name: string
-    image: string | null
-    rotation: number
-    reference: string | null
-    displaySize?: number  // Percentage 25-100
+    image?: string
+    text?: string
+    reference?: string
+    // Positioning data
+    box?: {
+        x: number
+        y: number
+        width: number
+        height: number
+        page?: number
+    }
+    // New fields
+    displaySize?: number // Percentage width (10-100)
+    rotation?: number // Degrees (0, 90, 180, 270)
 }
 
-// Convert Google Drive/Docs URL to embeddable format
-function convertToEmbedUrl(url: string): string {
-    if (!url) return url
-
-    if (url.includes('/preview') || url.includes('embedded=true')) {
-        return url
-    }
-
-    const driveMatch = url.match(/\/d\/([a-zA-Z0-9-_]+)/)
-    if (driveMatch && driveMatch[1]) {
-        const fileId = driveMatch[1]
-        if (url.includes('docs.google.com/document')) {
-            return `https://docs.google.com/document/d/${fileId}/pub?embedded=true`
-        }
-        return `https://drive.google.com/file/d/${fileId}/preview`
-    }
-
-    return url
+interface SourceSheetViewerProps {
+    sourceDoc?: string | null
+    sourcesJson?: string | null
+    title?: string
 }
 
 export default function SourceSheetViewer({ sourceDoc, sourcesJson, title }: SourceSheetViewerProps) {
-    const [showPdf, setShowPdf] = useState(false)
+    const [allSources, setAllSources] = useState<ExtractedSource[]>([])
     const [expandedSources, setExpandedSources] = useState<Set<string>>(new Set())
+    const [showPdf, setShowPdf] = useState(false)
+    const [embedUrl, setEmbedUrl] = useState<string | null>(null)
 
-    // Parse clipped sources
-    const sources: SourceData[] = useMemo(() => {
-        if (!sourcesJson) return []
-        try {
-            return JSON.parse(sourcesJson)
-        } catch {
-            return []
+    // Load sources from JSON
+    useEffect(() => {
+        if (sourcesJson) {
+            try {
+                // Handle case where sourcesJson might be double-encoded or wrapped
+                let parsed = typeof sourcesJson === 'string' ? JSON.parse(sourcesJson) : sourcesJson
+                if (typeof parsed === 'string') parsed = JSON.parse(parsed)
+
+                if (Array.isArray(parsed)) {
+                    setAllSources(parsed)
+                    // Expand all by default
+                    setExpandedSources(new Set(parsed.map((s: ExtractedSource) => s.id)))
+                }
+            } catch (e) {
+                console.error('Failed to parse sources JSON', e)
+            }
         }
     }, [sourcesJson])
 
-    const hasClippedSources = sources.length > 0
-    const hasPdfUrl = Boolean(sourceDoc && !sourceDoc.startsWith('sources:'))
-
-    // Legacy support: check if sourceDoc contains old format
-    const legacySources: SourceData[] = useMemo(() => {
-        if (sourceDoc?.startsWith('sources:')) {
-            try {
-                return JSON.parse(sourceDoc.slice(8))
-            } catch {
-                return []
+    // Prepare PDF URL
+    useEffect(() => {
+        if (sourceDoc) {
+            // Convert Dropbox/Google Drive links to embeddable versions
+            let url = sourceDoc
+            if (url.includes('dropbox.com')) {
+                url = url.replace('?dl=0', '').replace('?dl=1', '') + '?raw=1'
+            } else if (url.includes('drive.google.com') && url.includes('/view')) {
+                url = url.replace('/view', '/preview')
             }
+            setEmbedUrl(url)
         }
-        return []
     }, [sourceDoc])
 
-    const allSources = hasClippedSources ? sources : legacySources
-    const hasAnySources = allSources.length > 0
-
-    const embedUrl = useMemo(() => {
-        if (!hasPdfUrl || !sourceDoc) return null
-        return convertToEmbedUrl(sourceDoc)
-    }, [sourceDoc, hasPdfUrl])
-
     const toggleSource = (id: string) => {
-        setExpandedSources(prev => {
-            const next = new Set(prev)
-            if (next.has(id)) {
-                next.delete(id)
-            } else {
-                next.add(id)
-            }
-            return next
-        })
+        const newExpanded = new Set(expandedSources)
+        if (newExpanded.has(id)) {
+            newExpanded.delete(id)
+        } else {
+            newExpanded.add(id)
+        }
+        setExpandedSources(newExpanded)
     }
 
     const expandAll = () => {
@@ -94,6 +85,18 @@ export default function SourceSheetViewer({ sourceDoc, sourcesJson, title }: Sou
     const collapseAll = () => {
         setExpandedSources(new Set())
     }
+
+    const hasPdfUrl = !!sourceDoc
+    const hasAnySources = allSources.length > 0
+
+    // If no sources but we have a PDF, just show PDF.
+    // If we have sources, show Clipped View by default.
+    // Unless manual toggle.
+    useEffect(() => {
+        if (!hasAnySources && hasPdfUrl) {
+            setShowPdf(true)
+        }
+    }, [hasAnySources, hasPdfUrl])
 
     if (!hasAnySources && !hasPdfUrl) return null
 
@@ -115,7 +118,7 @@ export default function SourceSheetViewer({ sourceDoc, sourcesJson, title }: Sou
                 </div>
 
                 {/* Controls Area */}
-                <div className="flex items-center gap-4 self-end md:self-auto">
+                <div className="flex items-center gap-4 self-end md:self-auto flex-wrap justify-end">
 
                     {/* Expand/Collapse Toggle (Only in Clipped View) */}
                     {!showPdf && hasAnySources && (
@@ -127,17 +130,19 @@ export default function SourceSheetViewer({ sourceDoc, sourcesJson, title }: Sou
                                     expandAll()
                                 }
                             }}
-                            className="bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5"
+                            className="bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 white-space-nowrap"
                         >
                             {expandedSources.size > 0 ? (
                                 <>
                                     <ChevronUp size={14} />
-                                    Collapse All
+                                    <span className="hidden sm:inline">Collapse All</span>
+                                    <span className="sm:hidden">Collapse</span>
                                 </>
                             ) : (
                                 <>
                                     <ChevronDown size={14} />
-                                    Expand All
+                                    <span className="hidden sm:inline">Expand All</span>
+                                    <span className="sm:hidden">Expand</span>
                                 </>
                             )}
                         </button>
@@ -165,6 +170,19 @@ export default function SourceSheetViewer({ sourceDoc, sourcesJson, title }: Sou
                                 PDF
                             </button>
                         </div>
+                    )}
+
+                    {/* External Link button (Moved here from overlay) */}
+                    {hasPdfUrl && (
+                        <a
+                            href={sourceDoc!}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="bg-gray-100 p-2 rounded-lg text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                            title="Open Original PDF in New Tab"
+                        >
+                            <ExternalLink size={18} />
+                        </a>
                     )}
                 </div>
             </div>
@@ -236,18 +254,6 @@ export default function SourceSheetViewer({ sourceDoc, sourcesJson, title }: Sou
                             allowFullScreen
                             loading="lazy"
                         />
-                        {/* External Link Overlay */}
-                        <div className="absolute top-4 right-4 print:hidden">
-                            <a
-                                href={sourceDoc!}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/90 backdrop-blur text-xs font-medium text-slate-700 rounded-lg shadow-sm border border-slate-200 hover:text-blue-600 hover:bg-white transition-all"
-                            >
-                                <ExternalLink size={12} />
-                                Open External
-                            </a>
-                        </div>
                     </div>
                 )}
             </div>

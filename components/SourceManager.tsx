@@ -812,10 +812,10 @@ export default function SourceManager() {
                                                 key={i}
                                                 cx={p.x}
                                                 cy={p.y}
-                                                r="4"
+                                                r="0.8"
                                                 fill="#2563eb"
                                                 stroke="white"
-                                                strokeWidth="2px"
+                                                strokeWidth="1.5px"
                                                 vectorEffect="non-scaling-stroke"
                                             />
                                         ))}

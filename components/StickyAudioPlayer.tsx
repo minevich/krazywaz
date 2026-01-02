@@ -93,64 +93,66 @@ export default function StickyAudioPlayer({ shiur }: StickyAudioPlayerProps) {
     return (
         <>
             <audio ref={audioRef} src={shiur.audioUrl} preload="metadata" />
-            <div className="fixed bottom-0 left-0 right-0 z-50 bg-primary text-white shadow-2xl">
+            <div className="fixed bottom-0 left-0 right-0 z-50 bg-primary text-white shadow-2xl safe-area-pb">
                 {/* Minimize Button */}
                 <button
                     onClick={() => setIsMinimized(true)}
-                    className="absolute -top-7 md:-top-9 right-4 bg-primary text-white px-3 py-1 md:px-4 md:py-1.5 rounded-t-lg text-xs md:text-sm hover:bg-primary/90 transition-colors flex items-center gap-1"
+                    className="absolute -top-7 md:-top-8 right-4 bg-primary text-white px-3 py-1 md:px-4 md:py-1 rounded-t-lg text-xs md:text-sm hover:bg-primary/90 transition-colors flex items-center gap-1 shadow-md"
                 >
                     <i className="fas fa-chevron-down"></i>
                     Hide
                 </button>
 
-                <div className="max-w-5xl mx-auto px-4 py-2 md:py-5">
-                    <div className="flex items-center gap-3 md:gap-6">
-                        {/* Rewind */}
+                <div className="max-w-4xl mx-auto px-4 py-2 md:py-3">
+                    <div className="flex items-center gap-3 md:gap-5">
+                        {/* Rewind 30s */}
                         <button
                             onClick={() => {
                                 if (audioRef.current) {
-                                    audioRef.current.currentTime = Math.max(0, currentTime - 15)
+                                    audioRef.current.currentTime = Math.max(0, currentTime - 30)
                                 }
                             }}
-                            className="p-1.5 hover:bg-white/10 rounded-full transition-colors hidden sm:block"
-                            title="Rewind 15s"
+                            className="p-2 hover:bg-white/10 rounded-full transition-colors hidden sm:flex flex-col items-center justify-center relative group"
+                            title="Rewind 30s"
                         >
-                            <i className="fas fa-backward text-sm md:text-lg"></i>
+                            <i className="fas fa-undo text-sm md:text-lg"></i>
+                            <span className="absolute text-[8px] font-bold mt-0.5 pointer-events-none">30</span>
                         </button>
 
                         {/* Play button */}
                         <button
                             onClick={togglePlay}
-                            className="w-10 h-10 md:w-14 md:h-14 bg-white text-primary rounded-full flex items-center justify-center hover:scale-105 transition-transform shadow flex-shrink-0"
+                            className="w-10 h-10 md:w-12 md:h-12 bg-white text-primary rounded-full flex items-center justify-center hover:scale-105 transition-transform shadow-lg flex-shrink-0"
                         >
-                            <i className={`fas ${isPlaying ? 'fa-pause' : 'fa-play'} text-base md:text-xl ${!isPlaying ? 'ml-0.5' : ''}`}></i>
+                            <i className={`fas ${isPlaying ? 'fa-pause' : 'fa-play'} text-base md:text-lg ${!isPlaying ? 'ml-0.5' : ''}`}></i>
                         </button>
 
-                        {/* Forward */}
+                        {/* Forward 30s */}
                         <button
                             onClick={() => {
                                 if (audioRef.current) {
-                                    audioRef.current.currentTime = Math.min(duration, currentTime + 15)
+                                    audioRef.current.currentTime = Math.min(duration, currentTime + 30)
                                 }
                             }}
-                            className="p-1.5 hover:bg-white/10 rounded-full transition-colors hidden sm:block"
-                            title="Forward 15s"
+                            className="p-2 hover:bg-white/10 rounded-full transition-colors hidden sm:flex flex-col items-center justify-center relative group"
+                            title="Forward 30s"
                         >
-                            <i className="fas fa-forward text-sm md:text-lg"></i>
+                            <i className="fas fa-redo text-sm md:text-lg"></i>
+                            <span className="absolute text-[8px] font-bold mt-0.5 pointer-events-none">30</span>
                         </button>
 
                         {/* Time */}
-                        <span className="text-xs md:text-sm opacity-80 w-12 md:w-14 text-right flex-shrink-0">{formatTime(currentTime)}</span>
+                        <span className="text-xs md:text-sm opacity-80 w-10 md:w-12 text-right flex-shrink-0 font-medium tabular-nums">{formatTime(currentTime)}</span>
 
                         {/* Progress Bar */}
-                        <div className="flex-1">
+                        <div className="flex-1 h-8 flex items-center group">
                             <input
                                 type="range"
                                 min="0"
                                 max={duration || 100}
                                 value={currentTime}
                                 onChange={handleSeek}
-                                className="w-full h-2 md:h-2.5 bg-white/20 rounded-lg appearance-none cursor-pointer accent-white"
+                                className="w-full h-1.5 md:h-1.5 bg-white/20 rounded-lg appearance-none cursor-pointer accent-white transition-all group-hover:h-2"
                                 style={{
                                     background: `linear-gradient(to right, white ${progress}%, rgba(255,255,255,0.2) ${progress}%)`
                                 }}
@@ -158,19 +160,19 @@ export default function StickyAudioPlayer({ shiur }: StickyAudioPlayerProps) {
                         </div>
 
                         {/* Duration */}
-                        <span className="text-xs md:text-sm opacity-80 w-12 md:w-14 flex-shrink-0">{formatTime(duration)}</span>
+                        <span className="text-xs md:text-sm opacity-80 w-10 md:w-12 flex-shrink-0 font-medium tabular-nums">{formatTime(duration)}</span>
 
                         {/* Speed control */}
                         <div className="relative">
                             <button
                                 onClick={() => setShowSpeedMenu(!showSpeedMenu)}
-                                className="px-2 py-1 text-xs md:text-sm font-medium bg-white/10 hover:bg-white/20 rounded transition-colors"
+                                className="px-2 py-1 text-xs font-medium bg-white/10 hover:bg-white/20 rounded-md transition-colors w-10 text-center"
                             >
                                 {playbackRate}x
                             </button>
 
                             {showSpeedMenu && (
-                                <div className="absolute bottom-full right-0 mb-2 bg-white text-gray-800 rounded-lg shadow-xl overflow-hidden">
+                                <div className="absolute bottom-full right-0 mb-2 bg-white text-gray-800 rounded-lg shadow-xl overflow-hidden min-w-[80px]">
                                     {SPEEDS.map((speed) => (
                                         <button
                                             key={speed}
@@ -178,7 +180,7 @@ export default function StickyAudioPlayer({ shiur }: StickyAudioPlayerProps) {
                                                 setPlaybackRate(speed)
                                                 setShowSpeedMenu(false)
                                             }}
-                                            className={`block w-full px-4 py-2 text-sm hover:bg-gray-100 text-left ${playbackRate === speed ? 'bg-primary text-white' : ''
+                                            className={`block w-full px-3 py-1.5 text-xs hover:bg-gray-100 text-left ${playbackRate === speed ? 'bg-primary text-white' : ''
                                                 }`}
                                         >
                                             {speed}x
