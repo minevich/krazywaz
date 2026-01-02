@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-export const runtime = 'edge'
+// Note: Don't use edge runtime here - OpenNext handles this automatically
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY
 
