@@ -10,6 +10,8 @@ interface Source {
     id: string
     pageIndex: number
     box: { x: number; y: number; width: number; height: number }
+    rotation: number  // Degrees of rotation
+    clippedImage: string | null  // Data URL of the clipped region
     text: string
     reference: string | null
     sefariaUrl: string | null
@@ -199,6 +201,8 @@ export default function SourceManager() {
                     id: s.id || `source-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                     pageIndex,
                     box: s.box,
+                    rotation: 0,
+                    clippedImage: null,  // Will be generated after
                     text: s.text || '',
                     reference: s.reference || null,
                     sefariaUrl: null,
@@ -371,6 +375,8 @@ export default function SourceManager() {
                 id: `manual-${Date.now()}`,
                 pageIndex: currentPageIndex,
                 box: { x, y, width, height },
+                rotation: 0,
+                clippedImage: null,
                 text: '',
                 reference: null,
                 sefariaUrl: null,
@@ -418,6 +424,8 @@ export default function SourceManager() {
                 id: `grid-${currentPageIndex}-${i}`,
                 pageIndex: currentPageIndex,
                 box: { x: 5, y: 5 + (i * rowHeight), width: 90, height: rowHeight },
+                rotation: 0,
+                clippedImage: null,
                 text: '',
                 reference: null,
                 sefariaUrl: null,
@@ -435,6 +443,120 @@ export default function SourceManager() {
     const clearCurrentPage = () => {
         setSources(prev => prev.filter(s => s.pageIndex !== currentPageIndex))
         setSelectedSourceId(null)
+    }
+
+    // Clip image from source region
+    const clipSourceImage = (source: Source): string | null => {
+        const page = pages[source.pageIndex]
+        if (!page) return null
+
+        const img = new Image()
+        img.src = page.imageDataUrl
+
+        // Create canvas for clipping
+        const canvas = document.createElement('canvas')
+        const ctx = canvas.getContext('2d')
+        if (!ctx) return null
+
+        // Calculate pixel coordinates from percentages
+        const sx = (source.box.x / 100) * page.width
+        const sy = (source.box.y / 100) * page.height
+        const sw = (source.box.width / 100) * page.width
+        const sh = (source.box.height / 100) * page.height
+
+        canvas.width = sw
+        canvas.height = sh
+
+        // Handle rotation
+        if (source.rotation !== 0) {
+            ctx.save()
+            ctx.translate(canvas.width / 2, canvas.height / 2)
+            ctx.rotate((source.rotation * Math.PI) / 180)
+            ctx.translate(-canvas.width / 2, -canvas.height / 2)
+        }
+
+        ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh)
+
+        if (source.rotation !== 0) {
+            ctx.restore()
+        }
+
+        return canvas.toDataURL('image/png')
+    }
+
+    // Generate clipped images for all sources on current page
+    const generateClippedImages = () => {
+        setSources(prev => prev.map(s => {
+            if (s.pageIndex === currentPageIndex && !s.clippedImage) {
+                return { ...s, clippedImage: clipSourceImage(s) }
+            }
+            return s
+        }))
+    }
+
+    // Rotate a source
+    const rotateSource = (id: string, degrees: number) => {
+        setSources(prev => prev.map(s =>
+            s.id === id ? { ...s, rotation: (s.rotation + degrees) % 360 } : s
+        ))
+    }
+
+    // Clear OCR text from a source
+    const clearSourceOCR = (id: string) => {
+        setSources(prev => prev.map(s =>
+            s.id === id ? { ...s, text: '', reference: null, sefariaUrl: null, sefariaText: null } : s
+        ))
+    }
+
+    // OCR a specific source (call Gemini for just this region)
+    const ocrSource = async (source: Source) => {
+        if (!source.clippedImage) {
+            // Generate clipped image first
+            const clipped = clipSourceImage(source)
+            if (!clipped) return
+            source.clippedImage = clipped
+        }
+
+        setStatusMessage(`OCR'ing source...`)
+
+        try {
+            // Convert clipped image to blob
+            const response = await fetch(source.clippedImage)
+            const blob = await response.blob()
+            const file = new File([blob], 'source.png', { type: 'image/png' })
+
+            const formData = new FormData()
+            formData.append('image', file)
+
+            const res = await fetch('/api/sources/analyze', {
+                method: 'POST',
+                body: formData
+            })
+
+            const data = await res.json() as {
+                success: boolean
+                sources?: Array<{ text?: string; reference?: string | null }>
+            }
+
+            if (data.success && data.sources && data.sources.length > 0) {
+                const result = data.sources[0]
+                setSources(prev => prev.map(s =>
+                    s.id === source.id ? {
+                        ...s,
+                        text: result.text || '',
+                        reference: result.reference || null
+                    } : s
+                ))
+                setStatusMessage('OCR complete!')
+            } else {
+                setStatusMessage('OCR found no text')
+            }
+        } catch (err) {
+            console.error('OCR failed:', err)
+            setStatusMessage('OCR failed')
+        }
+
+        setTimeout(() => setStatusMessage(''), 2000)
     }
 
     const reanalyzeCurrentPage = async () => {
@@ -641,16 +763,18 @@ export default function SourceManager() {
                                             setSelectedSourceId(source.id)
                                         }}
                                         className={`absolute border-2 transition-all group ${selectedSourceId === source.id
-                                                ? 'border-green-500 bg-green-500/20 shadow-lg z-20'
-                                                : source.sefariaUrl
-                                                    ? 'border-purple-500 bg-purple-500/10 hover:bg-purple-500/20'
-                                                    : 'border-blue-500 bg-blue-500/10 hover:bg-blue-500/20'
+                                            ? 'border-green-500 bg-green-500/20 shadow-lg z-20'
+                                            : source.sefariaUrl
+                                                ? 'border-purple-500 bg-purple-500/10 hover:bg-purple-500/20'
+                                                : 'border-blue-500 bg-blue-500/10 hover:bg-blue-500/20'
                                             }`}
                                         style={{
                                             left: `${source.box.x}%`,
                                             top: `${source.box.y}%`,
                                             width: `${source.box.width}%`,
-                                            height: `${source.box.height}%`
+                                            height: `${source.box.height}%`,
+                                            transform: source.rotation ? `rotate(${source.rotation}deg)` : undefined,
+                                            transformOrigin: 'center center'
                                         }}
                                     >
                                         {/* Source Number Badge */}
@@ -658,14 +782,21 @@ export default function SourceManager() {
                                             {idx + 1}
                                         </span>
 
+                                        {/* Rotation indicator */}
+                                        {source.rotation !== 0 && (
+                                            <span className="absolute -top-2.5 left-4 w-5 h-5 bg-orange-500 text-white text-[8px] rounded-full flex items-center justify-center shadow z-10">
+                                                {source.rotation}°
+                                            </span>
+                                        )}
+
                                         {/* Sefaria Badge */}
                                         {source.sefariaUrl && (
-                                            <span className="absolute -top-2.5 left-4 w-5 h-5 bg-purple-600 text-white text-xs rounded-full flex items-center justify-center shadow z-10">
+                                            <span className="absolute -top-2.5 left-10 w-5 h-5 bg-purple-600 text-white text-xs rounded-full flex items-center justify-center shadow z-10">
                                                 ✓
                                             </span>
                                         )}
 
-                                        {/* DELETE BUTTON - Always visible */}
+                                        {/* DELETE BUTTON */}
                                         <button
                                             onClick={(e) => {
                                                 e.stopPropagation()
@@ -675,6 +806,28 @@ export default function SourceManager() {
                                             title="Delete source"
                                         >
                                             ×
+                                        </button>
+
+                                        {/* ROTATE BUTTONS */}
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation()
+                                                rotateSource(source.id, -90)
+                                            }}
+                                            className="absolute -bottom-2.5 left-1/2 -translate-x-6 w-5 h-5 bg-orange-500 hover:bg-orange-600 text-white text-xs rounded-full shadow flex items-center justify-center z-20"
+                                            title="Rotate left 90°"
+                                        >
+                                            ↶
+                                        </button>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation()
+                                                rotateSource(source.id, 90)
+                                            }}
+                                            className="absolute -bottom-2.5 left-1/2 translate-x-1 w-5 h-5 bg-orange-500 hover:bg-orange-600 text-white text-xs rounded-full shadow flex items-center justify-center z-20"
+                                            title="Rotate right 90°"
+                                        >
+                                            ↷
                                         </button>
 
                                         {/* DRAG AREA - Center of box */}
@@ -753,38 +906,102 @@ export default function SourceManager() {
                                                 className={`p-3 cursor-pointer transition-colors ${selectedSourceId === source.id ? 'bg-blue-50' : 'hover:bg-slate-50'
                                                     }`}
                                             >
+                                                {/* Header with number and reference */}
                                                 <div className="flex items-center justify-between mb-2">
                                                     <div className="flex items-center gap-2">
                                                         <span className="w-5 h-5 bg-blue-600 text-white text-xs font-bold rounded-full flex items-center justify-center">
                                                             {idx + 1}
                                                         </span>
-                                                        <span className="font-medium text-slate-800 text-sm">
-                                                            {source.reference || '(No reference)'}
+                                                        <span className="font-medium text-slate-800 text-sm truncate max-w-[150px]">
+                                                            {source.reference || 'Untitled'}
                                                         </span>
+                                                        {source.rotation !== 0 && (
+                                                            <span className="text-[10px] text-orange-500">({source.rotation}°)</span>
+                                                        )}
                                                     </div>
-                                                    {source.sefariaUrl && (
-                                                        <a
-                                                            href={source.sefariaUrl}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            onClick={(e) => e.stopPropagation()}
-                                                            className="text-purple-600 text-xs hover:underline"
+                                                    <div className="flex items-center gap-1">
+                                                        {source.sefariaUrl && (
+                                                            <a
+                                                                href={source.sefariaUrl}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                onClick={(e) => e.stopPropagation()}
+                                                                className="text-purple-600 text-xs hover:underline"
+                                                            >
+                                                                Sefaria ↗
+                                                            </a>
+                                                        )}
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); deleteSource(source.id); }}
+                                                            className="w-5 h-5 text-red-500 hover:bg-red-100 rounded flex items-center justify-center text-xs"
+                                                            title="Delete"
                                                         >
-                                                            Sefaria ↗
-                                                        </a>
+                                                            ×
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                {/* CLIPPED IMAGE PREVIEW */}
+                                                <div className="bg-slate-100 rounded-lg overflow-hidden mb-2 relative">
+                                                    {source.clippedImage ? (
+                                                        <img
+                                                            src={source.clippedImage}
+                                                            alt={`Source ${idx + 1}`}
+                                                            className="w-full max-h-32 object-contain"
+                                                            style={{ transform: source.rotation ? `rotate(${source.rotation}deg)` : undefined }}
+                                                        />
+                                                    ) : (
+                                                        <div className="h-20 flex items-center justify-center text-slate-400 text-xs">
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation()
+                                                                    const clipped = clipSourceImage(source)
+                                                                    if (clipped) {
+                                                                        setSources(prev => prev.map(s =>
+                                                                            s.id === source.id ? { ...s, clippedImage: clipped } : s
+                                                                        ))
+                                                                    }
+                                                                }}
+                                                                className="px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                                                            >
+                                                                📷 Generate Preview
+                                                            </button>
+                                                        </div>
                                                     )}
                                                 </div>
 
+                                                {/* OCR TEXT (if available) */}
                                                 {source.text && (
-                                                    <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed" dir="rtl">
-                                                        {source.text.substring(0, 80)}...
-                                                    </p>
+                                                    <div className="bg-amber-50 rounded p-2 mb-2">
+                                                        <div className="flex items-center justify-between mb-1">
+                                                            <span className="text-[10px] text-amber-700 font-medium">OCR Text:</span>
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); clearSourceOCR(source.id); }}
+                                                                className="text-[10px] text-red-500 hover:underline"
+                                                            >
+                                                                Clear OCR
+                                                            </button>
+                                                        </div>
+                                                        <p className="text-xs text-slate-700 line-clamp-3 leading-relaxed" dir="rtl">
+                                                            {source.text}
+                                                        </p>
+                                                    </div>
                                                 )}
 
-                                                {/* Edit reference input */}
+                                                {/* OCR BUTTON (if no text yet) */}
+                                                {!source.text && (
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); ocrSource(source); }}
+                                                        className="w-full py-1.5 bg-green-100 text-green-700 rounded text-xs hover:bg-green-200 flex items-center justify-center gap-1"
+                                                    >
+                                                        🔍 OCR this source
+                                                    </button>
+                                                )}
+
+                                                {/* Edit reference input (when selected) */}
                                                 {selectedSourceId === source.id && (
-                                                    <div className="mt-3 pt-3 border-t">
-                                                        <label className="text-xs font-medium text-slate-500 block mb-1">
+                                                    <div className="mt-2 pt-2 border-t">
+                                                        <label className="text-[10px] font-medium text-slate-500 block mb-1">
                                                             Reference:
                                                         </label>
                                                         <div className="flex gap-1">
@@ -793,10 +1010,11 @@ export default function SourceManager() {
                                                                 value={source.reference || ''}
                                                                 onChange={(e) => updateSourceReference(source.id, e.target.value)}
                                                                 placeholder="e.g., Bereishit 1:1"
-                                                                className="flex-1 text-sm px-2 py-1 border rounded"
+                                                                onClick={(e) => e.stopPropagation()}
+                                                                className="flex-1 text-xs px-2 py-1 border rounded"
                                                             />
                                                             <button
-                                                                onClick={() => lookupSource(source)}
+                                                                onClick={(e) => { e.stopPropagation(); lookupSource(source); }}
                                                                 disabled={!source.reference}
                                                                 className="px-2 py-1 text-xs bg-purple-100 text-purple-700 rounded hover:bg-purple-200 disabled:opacity-50"
                                                             >
