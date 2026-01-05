@@ -98,19 +98,21 @@ export default function StickyAudioPlayer({ shiur }: StickyAudioPlayerProps) {
             <div className="fixed bottom-0 left-0 right-0 z-50 pointer-events-none">
                 {/* Floating Island Design on Desktop, Full Width on Mobile */}
                 <div className="mx-auto max-w-3xl md:mb-6 pointer-events-auto">
-                    <div className="bg-white/95 backdrop-blur-md md:rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border-t md:border border-gray-200/50 p-4 safe-area-pb relative">
+                    <div className="bg-white/95 backdrop-blur-md md:rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border-t md:border border-gray-200/50 p-4 safe-area-pb relative pr-12 md:pr-4">
 
-                        {/* Explicit Hide Button (Desktop & Mobile) */}
-                        <button
-                            onClick={() => setIsMinimized(true)}
-                            className="absolute right-3 top-3 bg-gray-50 hover:bg-gray-100 text-gray-500 hover:text-gray-800 transition-colors px-2 py-1 rounded-md text-[10px] font-medium flex items-center gap-1 shadow-sm border border-gray-100"
-                            title="Collapse Player"
-                        >
-                            <ChevronDown size={12} />
-                            Hide
-                        </button>
+                        {/* Elegant Minimize Button */}
+                        {/* Desktop: Subtle top-right corner icon */}
+                        <div className="absolute top-0 right-0 p-2 md:p-3">
+                            <button
+                                onClick={() => setIsMinimized(true)}
+                                className="text-gray-400 hover:text-gray-700 hover:bg-gray-100/50 p-1.5 rounded-full transition-all"
+                                title="Collapse Player"
+                            >
+                                <ChevronDown size={18} strokeWidth={2} />
+                            </button>
+                        </div>
 
-                        <div className="flex flex-col gap-3 pt-2 md:pt-1">
+                        <div className="flex flex-col gap-3 pt-1">
                             <div className="flex items-center justify-between gap-4">
 
                                 {/* Controls Group */}
@@ -157,7 +159,7 @@ export default function StickyAudioPlayer({ shiur }: StickyAudioPlayerProps) {
                                 </div>
 
                                 {/* Desktop: Time & Speed on right */}
-                                <div className="hidden md:flex items-center gap-4 flex-1">
+                                <div className="hidden md:flex items-center gap-4 flex-1 mr-6">
                                     <span className="text-xs text-gray-500 font-medium w-10 text-right tabular-nums">{formatTime(currentTime)}</span>
 
                                     {/* Progress Bar */}
