@@ -59,11 +59,21 @@ export default function StickyAudioPlayer({ shiur }: StickyAudioPlayerProps) {
         setIsPlaying(!isPlaying)
     }
 
+    const skip = (seconds: number) => {
+        if (audioRef.current) {
+            audioRef.current.currentTime = Math.min(
+                Math.max(0, audioRef.current.currentTime + seconds),
+                duration || audioRef.current.duration || 999999
+            )
+        }
+    }
+
     const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
         const audio = audioRef.current
         if (!audio) return
-        audio.currentTime = parseFloat(e.target.value)
-        setCurrentTime(audio.currentTime)
+        const newTime = parseFloat(e.target.value)
+        audio.currentTime = newTime
+        setCurrentTime(newTime)
     }
 
     const formatTime = (time: number) => {
@@ -81,9 +91,9 @@ export default function StickyAudioPlayer({ shiur }: StickyAudioPlayerProps) {
                 <audio ref={audioRef} src={shiur.audioUrl} preload="metadata" />
                 <button
                     onClick={() => setIsMinimized(false)}
-                    className="fixed bottom-4 right-4 z-50 bg-white/95 backdrop-blur text-primary px-3 py-2 rounded-full shadow-lg border border-gray-100 hover:scale-105 transition-transform flex items-center gap-2 font-medium text-xs group"
+                    className="fixed bottom-4 right-4 z-50 bg-white/95 backdrop-blur text-blue-600 px-3 py-2 rounded-full shadow-lg border border-gray-100 hover:scale-105 transition-transform flex items-center gap-2 font-medium text-xs group"
                 >
-                    <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
+                    <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center group-hover:bg-blue-200 transition-colors">
                         {isPlaying ? <Pause size={10} fill="currentColor" /> : <Play size={10} fill="currentColor" className="ml-0.5" />}
                     </div>
                     <span>Resume</span>
@@ -98,13 +108,14 @@ export default function StickyAudioPlayer({ shiur }: StickyAudioPlayerProps) {
             <div className="fixed bottom-0 left-0 right-0 z-50 pointer-events-none">
                 {/* Floating Island Design on Desktop, Full Width on Mobile */}
                 <div className="mx-auto max-w-3xl md:mb-6 pointer-events-auto">
-                    <div className="bg-white/95 backdrop-blur-md md:rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border-t md:border border-gray-200/50 px-4 py-2 safe-area-pb relative">
+                    {/* Padding Adjust: py-3 on mobile (was py-2, increased slightly) */}
+                    <div className="bg-white/95 backdrop-blur-md md:rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border-t md:border border-gray-200/50 px-4 py-3 md:p-4 safe-area-pb relative">
 
                         {/* Elegant Hide Button with Text */}
                         <div className="absolute top-1 right-4 z-20">
                             <button
                                 onClick={() => setIsMinimized(true)}
-                                className="flex items-center gap-1 text-[10px] font-semibold tracking-wide text-gray-400 hover:text-primary transition-colors uppercase py-1 px-2 rounded-full hover:bg-gray-50/50"
+                                className="flex items-center gap-1 text-[10px] font-semibold tracking-wide text-gray-400 hover:text-blue-600 transition-colors uppercase py-1 px-2 rounded-full hover:bg-gray-50/50"
                                 title="Collapse Player"
                             >
                                 <span>Hide</span>
@@ -112,30 +123,25 @@ export default function StickyAudioPlayer({ shiur }: StickyAudioPlayerProps) {
                             </button>
                         </div>
 
-                        <div className="flex flex-col gap-2 pt-4 md:pt-2">
-                            {/* Added top padding to clear the hide button */}
+                        <div className="flex flex-col gap-2 pt-3 md:pt-2"> {/* pt-3 mobile to balance */}
                             <div className="flex items-center justify-between gap-4">
 
                                 {/* Controls Group */}
                                 <div className="flex items-center gap-3 md:gap-6 mx-auto md:mx-0">
-                                    {/* Rewind 30s */}
+                                    {/* Rewind 30s - Fixed Handler */}
                                     <button
-                                        onClick={() => {
-                                            if (audioRef.current) {
-                                                audioRef.current.currentTime = Math.max(0, currentTime - 30)
-                                            }
-                                        }}
-                                        className="text-gray-400 hover:text-primary transition-colors flex flex-col items-center gap-0.5 group p-2"
+                                        onClick={() => skip(-30)}
+                                        className="text-gray-400 hover:text-blue-600 transition-colors flex flex-col items-center gap-0.5 group p-2"
                                         title="Rewind 30s"
                                     >
                                         <RotateCcw size={18} strokeWidth={1.5} />
-                                        <span className="text-[10px] font-medium group-hover:text-primary">30</span>
+                                        <span className="text-[10px] font-medium group-hover:text-blue-600">30</span>
                                     </button>
 
                                     {/* Play button */}
                                     <button
                                         onClick={togglePlay}
-                                        className="w-12 h-12 bg-primary text-white rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-lg shadow-primary/20"
+                                        className="w-12 h-12 bg-blue-600 text-white rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-lg shadow-blue-600/30"
                                     >
                                         {isPlaying ? (
                                             <Pause size={20} fill="currentColor" />
@@ -144,18 +150,14 @@ export default function StickyAudioPlayer({ shiur }: StickyAudioPlayerProps) {
                                         )}
                                     </button>
 
-                                    {/* Forward 30s */}
+                                    {/* Forward 30s - Fixed Handler */}
                                     <button
-                                        onClick={() => {
-                                            if (audioRef.current) {
-                                                audioRef.current.currentTime = Math.min(duration, currentTime + 30)
-                                            }
-                                        }}
-                                        className="text-gray-400 hover:text-primary transition-colors flex flex-col items-center gap-0.5 group p-2"
+                                        onClick={() => skip(30)}
+                                        className="text-gray-400 hover:text-blue-600 transition-colors flex flex-col items-center gap-0.5 group p-2"
                                         title="Forward 30s"
                                     >
                                         <RotateCw size={18} strokeWidth={1.5} />
-                                        <span className="text-[10px] font-medium group-hover:text-primary">30</span>
+                                        <span className="text-[10px] font-medium group-hover:text-blue-600">30</span>
                                     </button>
                                 </div>
 
@@ -163,7 +165,7 @@ export default function StickyAudioPlayer({ shiur }: StickyAudioPlayerProps) {
                                 <div className="hidden md:flex items-center gap-4 flex-1">
                                     <span className="text-xs text-gray-500 font-medium w-10 text-right tabular-nums">{formatTime(currentTime)}</span>
 
-                                    {/* Progress Bar */}
+                                    {/* Progress Bar - Blue 600 */}
                                     <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden relative group cursor-pointer">
                                         <input
                                             type="range"
@@ -174,7 +176,7 @@ export default function StickyAudioPlayer({ shiur }: StickyAudioPlayerProps) {
                                             className="absolute inset-0 w-full h-full opacity-0 z-10 cursor-pointer"
                                         />
                                         <div
-                                            className="h-full bg-primary rounded-full transition-all duration-100"
+                                            className="h-full bg-blue-600 rounded-full transition-all duration-100 relative"
                                             style={{ width: `${progress}%` }}
                                         />
                                     </div>
@@ -185,7 +187,7 @@ export default function StickyAudioPlayer({ shiur }: StickyAudioPlayerProps) {
                                     <div className="relative">
                                         <button
                                             onClick={() => setShowSpeedMenu(!showSpeedMenu)}
-                                            className="text-xs font-bold text-gray-500 hover:text-primary hover:bg-gray-50 px-2 py-1 rounded transition-colors w-10 text-center"
+                                            className="text-xs font-bold text-gray-500 hover:text-blue-600 hover:bg-gray-50 px-2 py-1 rounded transition-colors w-10 text-center"
                                         >
                                             {playbackRate}x
                                         </button>
@@ -198,7 +200,7 @@ export default function StickyAudioPlayer({ shiur }: StickyAudioPlayerProps) {
                                                             setPlaybackRate(speed)
                                                             setShowSpeedMenu(false)
                                                         }}
-                                                        className={`block w-full py-1.5 text-xs font-medium rounded-lg transition-colors ${playbackRate === speed ? 'bg-primary/5 text-primary' : 'hover:bg-gray-50 text-gray-600'
+                                                        className={`block w-full py-1.5 text-xs font-medium rounded-lg transition-colors ${playbackRate === speed ? 'bg-blue-50 text-blue-600' : 'hover:bg-gray-50 text-gray-600'
                                                             }`}
                                                     >
                                                         {speed}
@@ -213,6 +215,7 @@ export default function StickyAudioPlayer({ shiur }: StickyAudioPlayerProps) {
                             {/* Mobile Only: Progress Bar & Time */}
                             <div className="md:hidden flex items-center gap-3">
                                 <span className="text-[10px] text-gray-400 font-medium w-8 text-right tabular-nums">{formatTime(currentTime)}</span>
+                                {/* Timeline container needs explicit height for hit area? Range input handles it. */}
                                 <div className="flex-1 h-1 bg-gray-100 rounded-full relative">
                                     <input
                                         type="range"
@@ -220,10 +223,11 @@ export default function StickyAudioPlayer({ shiur }: StickyAudioPlayerProps) {
                                         max={duration || 100}
                                         value={currentTime}
                                         onChange={handleSeek}
-                                        className="absolute inset-0 w-full h-full opacity-0 z-10"
+                                        // Increased touch target with h-4 and negative margin, centered
+                                        className="absolute top-1/2 -translate-y-1/2 -left-0 w-full h-6 opacity-0 z-20 cursor-pointer"
                                     />
                                     <div
-                                        className="h-full bg-primary rounded-full transition-all duration-100"
+                                        className="h-full bg-blue-600 rounded-full transition-all duration-100"
                                         style={{ width: `${progress}%` }}
                                     />
                                 </div>

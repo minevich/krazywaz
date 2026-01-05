@@ -36,8 +36,9 @@ export default function SourceSheetViewer({ sourceDoc, sourcesJson, title }: Sou
     const [embedUrl, setEmbedUrl] = useState<string | null>(null)
 
     // Lightbox State
-    const [previewImage, setPreviewImage] = useState<string | null>(null)
+    const [previewSource, setPreviewSource] = useState<ExtractedSource | null>(null)
     const [isZoomed, setIsZoomed] = useState(false)
+    const [zoomLevel, setZoomLevel] = useState(1)
 
     const hasPdfUrl = !!sourceDoc
     const hasAnySources = allSources.length > 0
@@ -99,7 +100,24 @@ export default function SourceSheetViewer({ sourceDoc, sourcesJson, title }: Sou
         setExpandedSources(new Set())
     }
 
+    // Scroll-to-Zoom Handler for Lightbox
+    const handleWheel = (e: React.WheelEvent) => {
+        // Prevent default scrolling of the page if possible, though easier on the container
+        // Ideally we want to zoom.
+        // Simple logic: Scroll Up = Zoom In. Scroll Down = Zoom Out.
+        if (previewSource) {
+            const delta = -e.deltaY * 0.002 // Sensitivity
+            const newZoom = Math.min(Math.max(0.2, zoomLevel + delta), 5) // Clamp 0.2x to 5x
+            setZoomLevel(newZoom)
+            if (newZoom !== 1) setIsZoomed(true)
+        }
+    }
 
+    const resetZoom = (e: React.MouseEvent) => {
+        e.stopPropagation()
+        setIsZoomed(false)
+        setZoomLevel(1)
+    }
 
     if (!hasAnySources && !hasPdfUrl) return null
 
@@ -227,8 +245,9 @@ export default function SourceSheetViewer({ sourceDoc, sourcesJson, title }: Sou
                                                     className="relative rounded-lg overflow-hidden shadow-sm border border-slate-200 w-full md:w-[var(--desktop-width)] group/image cursor-zoom-in"
                                                     style={{ '--desktop-width': `${displayWidth}%` } as React.CSSProperties}
                                                     onClick={() => {
-                                                        setPreviewImage(source.image || null)
+                                                        setPreviewSource(source)
                                                         setIsZoomed(false)
+                                                        setZoomLevel(1)
                                                     }}
                                                 >
                                                     <img
@@ -242,7 +261,7 @@ export default function SourceSheetViewer({ sourceDoc, sourcesJson, title }: Sou
                                                         loading="lazy"
                                                     />
 
-                                                    {/* Hover Overlay for Zoom Hint - Top Right Corner, No Blur */}
+                                                    {/* Hover Overlay for Zoom Hint - Top Right Corner*/}
                                                     <div className="absolute top-3 right-3 opacity-0 group-hover/image:opacity-100 transition-opacity duration-200 pointer-events-none">
                                                         <div className="bg-black/50 backdrop-blur-md text-white px-3 py-1.5 rounded-full flex items-center gap-2 text-xs font-medium shadow-sm">
                                                             <Maximize2 size={14} />
@@ -274,20 +293,23 @@ export default function SourceSheetViewer({ sourceDoc, sourcesJson, title }: Sou
             </div>
 
             {/* LIGHTBOX OVERLAY */}
-            {previewImage && (
+            {previewSource && (
                 <div
                     className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-sm flex flex-col animate-in fade-in duration-200 cursor-default"
-                    onClick={() => setPreviewImage(null)} // Clicking ANYWHERE on the background closes it
+                    onClick={() => setPreviewSource(null)} // Close on background click
+                    onWheel={handleWheel} // Capture wheel anywhere in overlay to zoom
                 >
                     {/* Toolbar */}
                     <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-center z-50 pointer-events-none">
-                        <span className="text-white/70 text-sm font-medium px-4">Preview</span>
+                        <span className="text-white/90 text-sm font-semibold px-4 drop-shadow-md truncate max-w-[80%]">
+                            {previewSource.name}
+                        </span>
                         <button
                             onClick={(e) => {
                                 e.stopPropagation()
-                                setPreviewImage(null)
+                                setPreviewSource(null)
                             }}
-                            className="pointer-events-auto bg-white/10 hover:bg-white/20 text-white rounded-full p-2.5 transition-colors backdrop-blur-md"
+                            className="pointer-events-auto bg-white/10 hover:bg-white/20 text-white rounded-full p-2.5 transition-colors backdrop-blur-md cursor-pointer"
                         >
                             <X size={20} />
                         </button>
@@ -295,16 +317,35 @@ export default function SourceSheetViewer({ sourceDoc, sourcesJson, title }: Sou
 
                     {/* Image Container */}
                     <div
-                        className={`flex-1 flex w-full h-full overflow-hidden ${isZoomed ? 'overflow-auto cursor-default' : 'items-center justify-center'}`}
+                        className={`flex-1 flex w-full h-full overflow-hidden ${isZoomed ? 'overflow-auto cursor-default' : 'items-center justify-center cursor-default'}`}
                     // Container click just bubbles up to Overlay close (no stopPropagation here)
                     >
                         <img
-                            src={previewImage}
-                            alt="Source Preview"
-                            className={`transition-all duration-300 shadow-2xl ${isZoomed ? 'min-w-full min-h-full object-none cursor-zoom-out' : 'max-w-full max-h-screen object-contain p-4 cursor-zoom-in'}`}
+                            src={previewSource.image}
+                            alt={previewSource.name}
+                            className={`transition-all duration-100 shadow-2xl ${
+                                // If Scale is applied dynamically, we use style, otherwise classes
+                                ''
+                                }`}
+                            style={{
+                                // Logic: If zoomed/scaled, force width. If default, use max dimensions.
+                                width: isZoomed ? `${zoomLevel * 100}%` : undefined,
+                                maxWidth: isZoomed ? 'none' : '100%',
+                                maxHeight: isZoomed ? 'none' : '100vh',
+                                objectFit: isZoomed ? 'contain' : 'contain',
+                                padding: isZoomed ? 0 : '1rem',
+                                cursor: isZoomed ? 'zoom-out' : 'zoom-in',
+                                transform: previewSource.rotation ? `rotate(${previewSource.rotation}deg)` : undefined
+                            }}
                             onClick={(e) => {
                                 e.stopPropagation() // Don't close when clicking image
-                                setIsZoomed(!isZoomed) // Toggle Zoom instead
+                                // Toggle Zoom on Click (1x <-> 2x, or Reset)
+                                if (isZoomed && zoomLevel !== 1) {
+                                    resetZoom(e)
+                                } else {
+                                    setIsZoomed(true)
+                                    setZoomLevel(2) // Jump to 2x on click
+                                }
                             }}
                         />
                     </div>
@@ -315,7 +356,13 @@ export default function SourceSheetViewer({ sourceDoc, sourcesJson, title }: Sou
                         onClick={(e) => e.stopPropagation()}
                     >
                         <button
-                            onClick={() => setIsZoomed(!isZoomed)}
+                            onClick={(e) => {
+                                if (isZoomed) resetZoom(e)
+                                else {
+                                    setIsZoomed(true)
+                                    setZoomLevel(2)
+                                }
+                            }}
                             className="bg-white/10 hover:bg-white/20 backdrop-blur-md text-white px-4 py-2.5 rounded-full flex items-center gap-2 text-sm font-medium shadow-xl transition-all border border-white/10"
                         >
                             {isZoomed ? <ZoomOut size={16} /> : <ZoomIn size={16} />}
