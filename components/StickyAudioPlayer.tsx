@@ -41,6 +41,11 @@ export default function StickyAudioPlayer({ shiur }: StickyAudioPlayerProps) {
         audio.addEventListener('loadedmetadata', updateDuration)
         audio.addEventListener('ended', handleEnded)
 
+        // Check if metadata is already loaded (fixes reload issue)
+        if (audio.readyState >= 1) {
+            updateDuration()
+        }
+
         return () => {
             audio.removeEventListener('timeupdate', updateTime)
             audio.removeEventListener('loadedmetadata', updateDuration)
