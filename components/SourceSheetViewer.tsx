@@ -273,7 +273,8 @@ export default function SourceSheetViewer({ sourceDoc, sourcesJson, title }: Sou
             {previewSource && (
                 <div
                     className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-sm flex flex-col animate-in fade-in duration-200"
-                    onClick={() => setPreviewSource(null)}
+                // We REMOVE the onClick here, because we handle it inside ZoomPanContainer carefully
+                // to differentiate pan vs click
                 >
                     {/* Toolbar */}
                     <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-center z-50 pointer-events-none">
@@ -313,9 +314,11 @@ function ZoomPanContainer({ src, alt, onClose }: { src: string; alt: string; onC
     const containerRef = useRef<HTMLDivElement>(null)
     const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 })
     const [isDragging, setIsDragging] = useState(false)
+    const [hasMoved, setHasMoved] = useState(false) // Track if drag actually happened
+
     const lastMouse = useRef({ x: 0, y: 0 })
 
-    // Pinch State for Mobile
+    // Pinch State
     const lastTouchDistance = useRef<number | null>(null)
     const lastTouchCenter = useRef<{ x: number, y: number } | null>(null)
 
@@ -325,14 +328,11 @@ function ZoomPanContainer({ src, alt, onClose }: { src: string; alt: string; onC
     }, [src])
 
     const updateTransform = (x: number, y: number, scale: number) => {
-        // Limit zoom
         const newScale = Math.min(Math.max(0.5, scale), 8)
-        // We typically don't limit translation strictly in a free-pan view, 
-        // but locking it to edges is "nice to have". For now free-pan is standard for lightboxes.
         setTransform({ x, y, scale: newScale })
     }
 
-    // --- MOUSE WHEEL ZOOM (POINTER AWARE) ---
+    // --- MOUSE WHEEL ZOOM ---
     const handleWheel = (e: React.WheelEvent) => {
         e.preventDefault()
         e.stopPropagation()
@@ -341,30 +341,15 @@ function ZoomPanContainer({ src, alt, onClose }: { src: string; alt: string; onC
         if (!rect) return
 
         const delta = -e.deltaY
-        // Smoothly adjust scale factor based on delta
-        // delta usually -100 or +100 per tick. 
         const factor = delta > 0 ? 1.1 : 0.9
 
         const newScale = Math.min(Math.max(0.5, transform.scale * factor), 8)
 
-        // Calculate pointer position relative to the element center (which is 0,0 in transform space initially)
-        // If the container is full screen centered:
-        // Center of container is window center.
-
         const containerCenterX = rect.width / 2
         const containerCenterY = rect.height / 2
 
-        // Mouse offset from center
         const offsetX = e.clientX - rect.left - containerCenterX
         const offsetY = e.clientY - rect.top - containerCenterY
-
-        // Logic: The point under the mouse (offsetX, offsetY) in "screen space"
-        // corresponds to some point P on the image.
-        // Screen = Translation + P * Scale
-        // P = (Screen - Translation) / Scale
-        // We want P to remain at the same Screen coordinate after new scale.
-        // (Screen - NewTranslate) / NewScale = (Screen - OldTranslate) / OldScale
-        // NewTranslate = Screen - (Screen - OldTranslate) * (NewScale / OldScale)
 
         const newX = offsetX - (offsetX - transform.x) * (newScale / transform.scale)
         const newY = offsetY - (offsetY - transform.y) * (newScale / transform.scale)
@@ -377,6 +362,7 @@ function ZoomPanContainer({ src, alt, onClose }: { src: string; alt: string; onC
         e.preventDefault()
         e.stopPropagation()
         setIsDragging(true)
+        setHasMoved(false) // Reset move tracker
         lastMouse.current = { x: e.clientX, y: e.clientY }
     }
 
@@ -387,13 +373,42 @@ function ZoomPanContainer({ src, alt, onClose }: { src: string; alt: string; onC
 
         const dx = e.clientX - lastMouse.current.x
         const dy = e.clientY - lastMouse.current.y
-        lastMouse.current = { x: e.clientX, y: e.clientY }
 
+        // Threshold check to avoid registering micro-motions as drags when clicking
+        if (Math.abs(dx) > 1 || Math.abs(dy) > 1) {
+            setHasMoved(true)
+        }
+
+        lastMouse.current = { x: e.clientX, y: e.clientY }
         updateTransform(transform.x + dx, transform.y + dy, transform.scale)
     }
 
-    const handleMouseUp = () => {
+    const handleMouseUp = (e: React.MouseEvent) => {
         setIsDragging(false)
+        // Note: Logic for "was it a click?" is handled in onClick, which fires after MouseUp.
+        // But if we preventDefault in down/move, onClick might not fire?
+        // Actually, if we preventDefault on DOWN, native focus/click might be suppressed.
+        // Let's rely on standard React onClick behavior.
+    }
+
+    // --- CLICK HANDLER (SMART CLOSE) ---
+    const handleClick = (e: React.MouseEvent) => {
+        e.stopPropagation()
+
+        // If we dragged (panned) significantly, ignore this "click"
+        if (hasMoved) return
+
+        // If we touched the Image, do NOT close (maybe toggle zoom?)
+        // We removed pointer-events-none from image so it is a valid target.
+        if (e.target instanceof HTMLImageElement) {
+            // Optional: Click image to toggle zoom?
+            // Users requested "click black part to collapse".
+            // So click image = do nothing (or zoom).
+            return
+        }
+
+        // If we clicked the background (Container)
+        onClose()
     }
 
     // --- PINCH ZOOM (TOUCH) ---
@@ -411,13 +426,11 @@ function ZoomPanContainer({ src, alt, onClose }: { src: string; alt: string; onC
     }
 
     const handleTouchStart = (e: React.TouchEvent) => {
-        // Essential: e.stopPropagation to prevent bubbling to background click
         e.stopPropagation()
+        setHasMoved(false)
 
         if (e.touches.length === 2) {
             lastTouchDistance.current = getDistance(e.touches[0], e.touches[1])
-            // Do not reset dragging here usually, or handle mixed logic?
-            // Let's keep it simple: if 2 fingers, we are pinching/panning roughly
         } else if (e.touches.length === 1) {
             lastMouse.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }
             setIsDragging(true)
@@ -426,11 +439,7 @@ function ZoomPanContainer({ src, alt, onClose }: { src: string; alt: string; onC
 
     const handleTouchMove = (e: React.TouchEvent) => {
         e.stopPropagation()
-
-        // Prevent default browser zoom of page!
-        // We also use 'touch-none' in CSS but strictly preventing default here is robust
-        // e.preventDefault() // React passive listener issue? 
-        // We rely on css 'touch-none' to make e.preventDefault unnecessary/working.
+        setHasMoved(true)
 
         if (e.touches.length === 2 && lastTouchDistance.current) {
             const newDist = getDistance(e.touches[0], e.touches[1])
@@ -438,10 +447,6 @@ function ZoomPanContainer({ src, alt, onClose }: { src: string; alt: string; onC
 
             const newScale = Math.min(Math.max(0.5, transform.scale * scaleFactor), 8)
 
-            // Simple center-zoom for pinch (improving simply over standard scale)
-            // It feels intuitive enough to just scale current view center?
-            // Or use pinch center?
-            // "Pinch center" is better.
             const rect = containerRef.current?.getBoundingClientRect()
             if (rect) {
                 const c = getCenter(e.touches[0], e.touches[1])
@@ -490,12 +495,13 @@ function ZoomPanContainer({ src, alt, onClose }: { src: string; alt: string; onC
             onWheel={handleWheel}
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
+            // We use standard onClick for the "Close" logic to separate Drag from Click
+            onClick={handleClick}
             onMouseUp={handleMouseUp}
             onMouseLeave={handleMouseUp}
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
-            onClick={(e) => { e.stopPropagation() }} // Prevent closing when clicking background of this internal container
             onDoubleClick={handleDoubleClick}
         >
             <img
@@ -504,17 +510,19 @@ function ZoomPanContainer({ src, alt, onClose }: { src: string; alt: string; onC
                 draggable={false}
                 style={{
                     transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`,
-                    transformOrigin: 'center', // Standard center origin, we manually translate 
+                    transformOrigin: 'center',
                     transition: isDragging || lastTouchDistance.current ? 'none' : 'transform 0.1s ease-out',
                     willChange: 'transform'
                 }}
-                className="max-w-[95vw] max-h-[90vh] object-contain shadow-2xl block touch-none select-none pointer-events-none"
+                className="max-w-[95vw] max-h-[90vh] object-contain shadow-2xl block touch-none select-none"
+            // Removed pointer-events-none so we can detect clicks on image vs background
             />
 
             {/* Controls Overlay */}
             <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-4 z-50 pointer-events-auto">
                 <button
-                    onClick={() => {
+                    onClick={(e) => {
+                        e.stopPropagation() // Don't trigger close
                         if (transform.scale > 1.1) setTransform({ x: 0, y: 0, scale: 1 })
                         else setTransform({ x: 0, y: 0, scale: 2.5 })
                     }}
