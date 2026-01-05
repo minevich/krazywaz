@@ -100,19 +100,20 @@ export default function StickyAudioPlayer({ shiur }: StickyAudioPlayerProps) {
                 <div className="mx-auto max-w-3xl md:mb-6 pointer-events-auto">
                     <div className="bg-white/95 backdrop-blur-md md:rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border-t md:border border-gray-200/50 p-4 safe-area-pb relative pr-12 md:pr-4">
 
-                        {/* Elegant Minimize Button */}
-                        {/* Desktop: Subtle top-right corner icon */}
-                        <div className="absolute top-0 right-0 p-2 md:p-3">
+                        {/* Elegant Hide Button with Text */}
+                        <div className="absolute top-2 right-4 z-20">
                             <button
                                 onClick={() => setIsMinimized(true)}
-                                className="text-gray-400 hover:text-gray-700 hover:bg-gray-100/50 p-1.5 rounded-full transition-all"
+                                className="flex items-center gap-1 text-[10px] font-semibold tracking-wide text-gray-400 hover:text-primary transition-colors uppercase py-1 px-2 rounded-full hover:bg-gray-50/50"
                                 title="Collapse Player"
                             >
-                                <ChevronDown size={18} strokeWidth={2} />
+                                <span>Hide</span>
+                                <ChevronDown size={12} strokeWidth={2.5} />
                             </button>
                         </div>
 
-                        <div className="flex flex-col gap-3 pt-1">
+                        <div className="flex flex-col gap-3 pt-4 md:pt-2">
+                            {/* Added top padding to clear the hide button */}
                             <div className="flex items-center justify-between gap-4">
 
                                 {/* Controls Group */}
@@ -159,7 +160,7 @@ export default function StickyAudioPlayer({ shiur }: StickyAudioPlayerProps) {
                                 </div>
 
                                 {/* Desktop: Time & Speed on right */}
-                                <div className="hidden md:flex items-center gap-4 flex-1 mr-6">
+                                <div className="hidden md:flex items-center gap-4 flex-1">
                                     <span className="text-xs text-gray-500 font-medium w-10 text-right tabular-nums">{formatTime(currentTime)}</span>
 
                                     {/* Progress Bar */}
