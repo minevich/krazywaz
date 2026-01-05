@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 
 interface Shiur {
   id?: string
@@ -294,6 +295,13 @@ export default function ShiurForm({ shiur, onSuccess, onCancel }: ShiurFormProps
                       <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
                       Contains Clipped Sources
                     </span>
+                    <Link
+                      href={`/admin/sources?shiurId=${shiur?.id || formData.slug}`}
+                      className="px-3 py-2 text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 text-sm font-medium transition-colors"
+                      target="_blank"
+                    >
+                      Edit
+                    </Link>
                     <button
                       type="button"
                       onClick={() => {

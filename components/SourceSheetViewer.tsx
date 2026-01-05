@@ -45,8 +45,8 @@ export default function SourceSheetViewer({ sourceDoc, sourcesJson, title }: Sou
 
                 if (Array.isArray(parsed)) {
                     setAllSources(parsed)
-                    // Expand all by default
-                    setExpandedSources(new Set(parsed.map((s: ExtractedSource) => s.id)))
+                    // Start collapsed by default
+                    setExpandedSources(new Set())
                 }
             } catch (e) {
                 console.error('Failed to parse sources JSON', e)
@@ -223,8 +223,8 @@ export default function SourceSheetViewer({ sourceDoc, sourcesJson, title }: Sou
                                     {isExpanded && source.image && (
                                         <div className="px-5 pb-6 pt-0 ml-10 border-l-2 border-slate-100 mb-4">
                                             <div
-                                                className="relative rounded-lg overflow-hidden shadow-sm border border-slate-200 transition-all duration-300"
-                                                style={{ width: `${displayWidth}%` }}
+                                                className="relative rounded-lg overflow-hidden shadow-sm border border-slate-200 transition-all duration-300 w-full md:w-[var(--desktop-width)]"
+                                                style={{ '--desktop-width': `${displayWidth}%` } as React.CSSProperties}
                                             >
                                                 <img
                                                     src={source.image}
