@@ -20,13 +20,20 @@ export default function StickyAudioPlayer({ shiur }: StickyAudioPlayerProps) {
     const [isMinimized, setIsMinimized] = useState(false)
     const [playbackRate, setPlaybackRate] = useState(1)
     const [showSpeedMenu, setShowSpeedMenu] = useState(false)
+
     const audioRef = useRef<HTMLAudioElement>(null)
+    const isDraggingRef = useRef(false) // Track if user is actively scrubbing
 
     useEffect(() => {
         const audio = audioRef.current
         if (!audio) return
 
-        const updateTime = () => setCurrentTime(audio.currentTime)
+        const updateTime = () => {
+            // Only update state from audio if user isn't dragging handle
+            if (!isDraggingRef.current) {
+                setCurrentTime(audio.currentTime)
+            }
+        }
         const updateDuration = () => setDuration(audio.duration)
         const handleEnded = () => setIsPlaying(false)
 
@@ -71,9 +78,16 @@ export default function StickyAudioPlayer({ shiur }: StickyAudioPlayerProps) {
     const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
         const audio = audioRef.current
         if (!audio) return
+
+        isDraggingRef.current = true // User is dragging
         const newTime = parseFloat(e.target.value)
-        audio.currentTime = newTime
-        setCurrentTime(newTime)
+
+        setCurrentTime(newTime) // Update UI instantly
+        audio.currentTime = newTime // Update audio
+    }
+
+    const handleSeekEnd = () => {
+        isDraggingRef.current = false
     }
 
     const formatTime = (time: number) => {
@@ -83,11 +97,6 @@ export default function StickyAudioPlayer({ shiur }: StickyAudioPlayerProps) {
         const minutes = Math.floor((time % 3600) / 60)
         const seconds = Math.floor(time % 60)
 
-        // Always format as H:MM:SS even if H is 0, to match request "h:mm:ss"
-        // Or if hours is 0, maybe M:SS? User asked nicely for "h:mm:ss".
-        // Example: "0:24:05" vs "24:05". 
-        // User said "its M:ss... i want h:mm:ss". Assuming always 3 part.
-
         const h = hours.toString()
         const m = minutes.toString().padStart(2, '0')
         const s = seconds.toString().padStart(2, '0')
@@ -95,12 +104,6 @@ export default function StickyAudioPlayer({ shiur }: StickyAudioPlayerProps) {
         if (hours > 0) {
             return `${h}:${m}:${s}`
         }
-        // If hour is 0, user implies they still want H:MM:SS or just seeing seconds clearly?
-        // User complaint was "it isn't M:ss its H:mm". 
-        // Actually user said: "it isn't M:ss its H:mm i want h:mm:ss". 
-        // This suggests they were seeing hours but confusing them??
-        // Or text was wrong.
-        // Safest: return 0:MM:SS if requested.
         return `0:${m}:${s}`
     }
 
@@ -194,6 +197,8 @@ export default function StickyAudioPlayer({ shiur }: StickyAudioPlayerProps) {
                                             max={duration || 100}
                                             value={currentTime}
                                             onChange={handleSeek}
+                                            onPointerUp={handleSeekEnd}
+                                            onTouchEnd={handleSeekEnd}
                                             className="absolute inset-0 w-full h-full opacity-0 z-20 cursor-pointer"
                                         />
                                         <div className="absolute inset-0 rounded-full overflow-hidden">
@@ -267,6 +272,8 @@ export default function StickyAudioPlayer({ shiur }: StickyAudioPlayerProps) {
                                         max={duration || 100}
                                         value={currentTime}
                                         onChange={handleSeek}
+                                        onPointerUp={handleSeekEnd}
+                                        onTouchEnd={handleSeekEnd}
                                         className="absolute inset-0 w-full h-full opacity-0 z-20 cursor-pointer"
                                         style={{ WebkitTapHighlightColor: 'transparent' }}
                                     />
