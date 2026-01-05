@@ -132,8 +132,8 @@ export default function StickyAudioPlayer({ shiur }: StickyAudioPlayerProps) {
             <div className="fixed bottom-0 left-0 right-0 z-50 pointer-events-none">
                 {/* Floating Island Design on Desktop, Full Width on Mobile */}
                 <div className="mx-auto max-w-3xl md:mb-6 pointer-events-auto">
-                    {/* Padding Adjust: py-3 mobile */}
-                    <div className="bg-white/95 backdrop-blur-md md:rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border-t md:border border-gray-200/50 px-4 py-3 md:p-4 safe-area-pb relative">
+                    {/* Padding Adjust: py-3 mobile, md:py-3 desktop (reduced from p-4) */}
+                    <div className="bg-white/95 backdrop-blur-md md:rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border-t md:border border-gray-200/50 px-4 py-3 md:px-6 md:py-3 safe-area-pb relative">
 
                         {/* Elegant Hide Button with Text */}
                         <div className="absolute top-1 right-4 z-20">
@@ -147,7 +147,7 @@ export default function StickyAudioPlayer({ shiur }: StickyAudioPlayerProps) {
                             </button>
                         </div>
 
-                        <div className="flex flex-col gap-2 pt-3 md:pt-2">
+                        <div className="flex flex-col gap-2 pt-3 md:pt-0">
                             <div className="flex items-center justify-between gap-4">
 
                                 {/* Controls Group */}
