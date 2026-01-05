@@ -132,8 +132,8 @@ export default function StickyAudioPlayer({ shiur }: StickyAudioPlayerProps) {
             <div className="fixed bottom-0 left-0 right-0 z-50 pointer-events-none">
                 {/* Floating Island Design on Desktop, Full Width on Mobile */}
                 <div className="mx-auto max-w-3xl md:mb-6 pointer-events-auto">
-                    {/* Padding Adjust: py-3 mobile, md:py-3 desktop (reduced from p-4) */}
-                    <div className="bg-white/95 backdrop-blur-md md:rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border-t md:border border-gray-200/50 px-4 py-3 md:px-6 md:py-3 safe-area-pb relative">
+                    {/* Padding Adjust: py-3 mobile, md:px-6 md:py-2 desktop (Compact) */}
+                    <div className="bg-white/95 backdrop-blur-md md:rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border-t md:border border-gray-200/50 px-4 py-3 md:px-6 md:py-2 safe-area-pb relative">
 
                         {/* Elegant Hide Button with Text */}
                         <div className="absolute top-1 right-4 z-20">
@@ -147,41 +147,41 @@ export default function StickyAudioPlayer({ shiur }: StickyAudioPlayerProps) {
                             </button>
                         </div>
 
-                        <div className="flex flex-col gap-2 pt-3 md:pt-0">
-                            <div className="flex items-center justify-between gap-4">
+                        <div className="flex flex-col gap-2 pt-3 md:pt-0"> {/* No top padding on desktop inner */}
+                            <div className="flex items-center justify-between gap-4 h-full">
 
-                                {/* Controls Group */}
-                                <div className="flex items-center gap-3 md:gap-6 mx-auto md:mx-0">
+                                {/* Controls Group - Perfectly Centered */}
+                                <div className="flex items-center gap-4 mx-auto md:mx-0 h-10">
                                     {/* Rewind 30s */}
                                     <button
                                         onClick={() => skip(-30)}
-                                        className="text-gray-400 hover:text-primary transition-colors flex flex-col items-center gap-0.5 group p-2"
+                                        className="text-gray-400 hover:text-primary transition-colors flex flex-col items-center gap-0.5 group p-1.5"
                                         title="Rewind 30s"
                                     >
-                                        <RotateCcw size={18} strokeWidth={1.5} />
-                                        <span className="text-[10px] font-medium group-hover:text-primary">30</span>
+                                        <RotateCcw size={16} strokeWidth={1.5} />
+                                        <span className="text-[9px] font-medium group-hover:text-primary leading-none">30</span>
                                     </button>
 
-                                    {/* Play button */}
+                                    {/* Play button - Smaller (w-10) */}
                                     <button
                                         onClick={togglePlay}
-                                        className="w-12 h-12 bg-primary text-white rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-lg shadow-primary/20"
+                                        className="w-10 h-10 bg-primary text-white rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-md shadow-primary/20"
                                     >
                                         {isPlaying ? (
-                                            <Pause size={20} fill="currentColor" />
+                                            <Pause size={18} fill="currentColor" />
                                         ) : (
-                                            <Play size={20} fill="currentColor" className="ml-1" />
+                                            <Play size={18} fill="currentColor" className="ml-0.5" />
                                         )}
                                     </button>
 
                                     {/* Forward 30s */}
                                     <button
                                         onClick={() => skip(30)}
-                                        className="text-gray-400 hover:text-primary transition-colors flex flex-col items-center gap-0.5 group p-2"
+                                        className="text-gray-400 hover:text-primary transition-colors flex flex-col items-center gap-0.5 group p-1.5"
                                         title="Forward 30s"
                                     >
-                                        <RotateCw size={18} strokeWidth={1.5} />
-                                        <span className="text-[10px] font-medium group-hover:text-primary">30</span>
+                                        <RotateCw size={16} strokeWidth={1.5} />
+                                        <span className="text-[9px] font-medium group-hover:text-primary leading-none">30</span>
                                     </button>
                                 </div>
 
