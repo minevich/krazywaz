@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { ChevronDown, ChevronUp, ExternalLink, Maximize2, X, ZoomIn, ZoomOut } from 'lucide-react'
+import { ChevronDown, ChevronUp, ExternalLink, Maximize2, X, ZoomIn, ZoomOut, RefreshCcw } from 'lucide-react'
 
 // Define source types based on what we're actually storing
 interface ExtractedSource {
@@ -37,8 +37,6 @@ export default function SourceSheetViewer({ sourceDoc, sourcesJson, title }: Sou
 
     // Lightbox State
     const [previewSource, setPreviewSource] = useState<ExtractedSource | null>(null)
-    const [isZoomed, setIsZoomed] = useState(false)
-    const [zoomLevel, setZoomLevel] = useState(1)
 
     const hasPdfUrl = !!sourceDoc
     const hasAnySources = allSources.length > 0
@@ -98,25 +96,6 @@ export default function SourceSheetViewer({ sourceDoc, sourcesJson, title }: Sou
 
     const collapseAll = () => {
         setExpandedSources(new Set())
-    }
-
-    // Scroll-to-Zoom Handler for Lightbox
-    const handleWheel = (e: React.WheelEvent) => {
-        // Prevent default scrolling of the page if possible, though easier on the container
-        // Ideally we want to zoom.
-        // Simple logic: Scroll Up = Zoom In. Scroll Down = Zoom Out.
-        if (previewSource) {
-            const delta = -e.deltaY * 0.002 // Sensitivity
-            const newZoom = Math.min(Math.max(0.2, zoomLevel + delta), 5) // Clamp 0.2x to 5x
-            setZoomLevel(newZoom)
-            if (newZoom !== 1) setIsZoomed(true)
-        }
-    }
-
-    const resetZoom = (e: React.MouseEvent) => {
-        e.stopPropagation()
-        setIsZoomed(false)
-        setZoomLevel(1)
     }
 
     if (!hasAnySources && !hasPdfUrl) return null
@@ -246,8 +225,6 @@ export default function SourceSheetViewer({ sourceDoc, sourcesJson, title }: Sou
                                                     style={{ '--desktop-width': `${displayWidth}%` } as React.CSSProperties}
                                                     onClick={() => {
                                                         setPreviewSource(source)
-                                                        setIsZoomed(false)
-                                                        setZoomLevel(1)
                                                     }}
                                                 >
                                                     <img
@@ -295,9 +272,8 @@ export default function SourceSheetViewer({ sourceDoc, sourcesJson, title }: Sou
             {/* LIGHTBOX OVERLAY */}
             {previewSource && (
                 <div
-                    className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-sm flex flex-col animate-in fade-in duration-200 cursor-default"
-                    onClick={() => setPreviewSource(null)} // Close on background click
-                    onWheel={handleWheel} // Capture wheel anywhere in overlay to zoom
+                    className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-sm flex flex-col animate-in fade-in duration-200"
+                    onClick={() => setPreviewSource(null)}
                 >
                     {/* Toolbar */}
                     <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-center z-50 pointer-events-none">
@@ -315,62 +291,239 @@ export default function SourceSheetViewer({ sourceDoc, sourcesJson, title }: Sou
                         </button>
                     </div>
 
-                    {/* Image Container */}
-                    <div
-                        className={`flex-1 flex w-full h-full overflow-hidden ${isZoomed ? 'overflow-auto cursor-default' : 'items-center justify-center cursor-default'}`}
-                    // Container click just bubbles up to Overlay close (no stopPropagation here)
-                    >
-                        <img
-                            src={previewSource.image}
+                    {/* Zoom/Pan Container */}
+                    <div className="absolute inset-0 z-0">
+                        <ZoomPanContainer
+                            src={previewSource.image!}
                             alt={previewSource.name}
-                            className={`transition-all duration-100 shadow-2xl ${
-                                // If Scale is applied dynamically, we use style, otherwise classes
-                                ''
-                                }`}
-                            style={{
-                                // Logic: If zoomed/scaled, force width. If default, use max dimensions.
-                                width: isZoomed ? `${zoomLevel * 100}%` : undefined,
-                                maxWidth: isZoomed ? 'none' : '100%',
-                                maxHeight: isZoomed ? 'none' : '100vh',
-                                objectFit: isZoomed ? 'contain' : 'contain',
-                                padding: isZoomed ? 0 : '1rem',
-                                cursor: isZoomed ? 'zoom-out' : 'zoom-in',
-                                transform: previewSource.rotation ? `rotate(${previewSource.rotation}deg)` : undefined
-                            }}
-                            onClick={(e) => {
-                                e.stopPropagation() // Don't close when clicking image
-                                // Toggle Zoom on Click (1x <-> 2x, or Reset)
-                                if (isZoomed && zoomLevel !== 1) {
-                                    resetZoom(e)
-                                } else {
-                                    setIsZoomed(true)
-                                    setZoomLevel(2) // Jump to 2x on click
-                                }
-                            }}
+                            onClose={() => setPreviewSource(null)}
                         />
-                    </div>
-
-                    {/* Footer Controls */}
-                    <div
-                        className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-4 z-50 pointer-events-auto"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <button
-                            onClick={(e) => {
-                                if (isZoomed) resetZoom(e)
-                                else {
-                                    setIsZoomed(true)
-                                    setZoomLevel(2)
-                                }
-                            }}
-                            className="bg-white/10 hover:bg-white/20 backdrop-blur-md text-white px-4 py-2.5 rounded-full flex items-center gap-2 text-sm font-medium shadow-xl transition-all border border-white/10"
-                        >
-                            {isZoomed ? <ZoomOut size={16} /> : <ZoomIn size={16} />}
-                            {isZoomed ? 'Fit to Screen' : 'Zoom In'}
-                        </button>
                     </div>
                 </div>
             )}
         </>
+    )
+}
+
+// ----------------------------------------------------------------------------
+// Internal Helper Component for Robust Zoom/Pan
+// ----------------------------------------------------------------------------
+
+function ZoomPanContainer({ src, alt, onClose }: { src: string; alt: string; onClose: () => void }) {
+    const containerRef = useRef<HTMLDivElement>(null)
+    const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 })
+    const [isDragging, setIsDragging] = useState(false)
+    const lastMouse = useRef({ x: 0, y: 0 })
+
+    // Pinch State for Mobile
+    const lastTouchDistance = useRef<number | null>(null)
+    const lastTouchCenter = useRef<{ x: number, y: number } | null>(null)
+
+    // Reset on mount
+    useEffect(() => {
+        setTransform({ x: 0, y: 0, scale: 1 })
+    }, [src])
+
+    const updateTransform = (x: number, y: number, scale: number) => {
+        // Limit zoom
+        const newScale = Math.min(Math.max(0.5, scale), 8)
+        // We typically don't limit translation strictly in a free-pan view, 
+        // but locking it to edges is "nice to have". For now free-pan is standard for lightboxes.
+        setTransform({ x, y, scale: newScale })
+    }
+
+    // --- MOUSE WHEEL ZOOM (POINTER AWARE) ---
+    const handleWheel = (e: React.WheelEvent) => {
+        e.preventDefault()
+        e.stopPropagation()
+
+        const rect = containerRef.current?.getBoundingClientRect()
+        if (!rect) return
+
+        const delta = -e.deltaY
+        // Smoothly adjust scale factor based on delta
+        // delta usually -100 or +100 per tick. 
+        const factor = delta > 0 ? 1.1 : 0.9
+
+        const newScale = Math.min(Math.max(0.5, transform.scale * factor), 8)
+
+        // Calculate pointer position relative to the element center (which is 0,0 in transform space initially)
+        // If the container is full screen centered:
+        // Center of container is window center.
+
+        const containerCenterX = rect.width / 2
+        const containerCenterY = rect.height / 2
+
+        // Mouse offset from center
+        const offsetX = e.clientX - rect.left - containerCenterX
+        const offsetY = e.clientY - rect.top - containerCenterY
+
+        // Logic: The point under the mouse (offsetX, offsetY) in "screen space"
+        // corresponds to some point P on the image.
+        // Screen = Translation + P * Scale
+        // P = (Screen - Translation) / Scale
+        // We want P to remain at the same Screen coordinate after new scale.
+        // (Screen - NewTranslate) / NewScale = (Screen - OldTranslate) / OldScale
+        // NewTranslate = Screen - (Screen - OldTranslate) * (NewScale / OldScale)
+
+        const newX = offsetX - (offsetX - transform.x) * (newScale / transform.scale)
+        const newY = offsetY - (offsetY - transform.y) * (newScale / transform.scale)
+
+        updateTransform(newX, newY, newScale)
+    }
+
+    // --- PANNING (MOUSE) ---
+    const handleMouseDown = (e: React.MouseEvent) => {
+        e.preventDefault()
+        e.stopPropagation()
+        setIsDragging(true)
+        lastMouse.current = { x: e.clientX, y: e.clientY }
+    }
+
+    const handleMouseMove = (e: React.MouseEvent) => {
+        if (!isDragging) return
+        e.preventDefault()
+        e.stopPropagation()
+
+        const dx = e.clientX - lastMouse.current.x
+        const dy = e.clientY - lastMouse.current.y
+        lastMouse.current = { x: e.clientX, y: e.clientY }
+
+        updateTransform(transform.x + dx, transform.y + dy, transform.scale)
+    }
+
+    const handleMouseUp = () => {
+        setIsDragging(false)
+    }
+
+    // --- PINCH ZOOM (TOUCH) ---
+    const getDistance = (t1: React.Touch, t2: React.Touch) => {
+        const dx = t1.clientX - t2.clientX
+        const dy = t1.clientY - t2.clientY
+        return Math.sqrt(dx * dx + dy * dy)
+    }
+
+    const getCenter = (t1: React.Touch, t2: React.Touch) => {
+        return {
+            x: (t1.clientX + t2.clientX) / 2,
+            y: (t1.clientY + t2.clientY) / 2
+        }
+    }
+
+    const handleTouchStart = (e: React.TouchEvent) => {
+        // Essential: e.stopPropagation to prevent bubbling to background click
+        e.stopPropagation()
+
+        if (e.touches.length === 2) {
+            lastTouchDistance.current = getDistance(e.touches[0], e.touches[1])
+            // Do not reset dragging here usually, or handle mixed logic?
+            // Let's keep it simple: if 2 fingers, we are pinching/panning roughly
+        } else if (e.touches.length === 1) {
+            lastMouse.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }
+            setIsDragging(true)
+        }
+    }
+
+    const handleTouchMove = (e: React.TouchEvent) => {
+        e.stopPropagation()
+
+        // Prevent default browser zoom of page!
+        // We also use 'touch-none' in CSS but strictly preventing default here is robust
+        // e.preventDefault() // React passive listener issue? 
+        // We rely on css 'touch-none' to make e.preventDefault unnecessary/working.
+
+        if (e.touches.length === 2 && lastTouchDistance.current) {
+            const newDist = getDistance(e.touches[0], e.touches[1])
+            const scaleFactor = newDist / lastTouchDistance.current
+
+            const newScale = Math.min(Math.max(0.5, transform.scale * scaleFactor), 8)
+
+            // Simple center-zoom for pinch (improving simply over standard scale)
+            // It feels intuitive enough to just scale current view center?
+            // Or use pinch center?
+            // "Pinch center" is better.
+            const rect = containerRef.current?.getBoundingClientRect()
+            if (rect) {
+                const c = getCenter(e.touches[0], e.touches[1])
+                const offsetX = c.x - rect.left - rect.width / 2
+                const offsetY = c.y - rect.top - rect.height / 2
+
+                const newX = offsetX - (offsetX - transform.x) * (newScale / transform.scale)
+                const newY = offsetY - (offsetY - transform.y) * (newScale / transform.scale)
+
+                updateTransform(newX, newY, newScale)
+            } else {
+                updateTransform(transform.x, transform.y, newScale)
+            }
+
+            lastTouchDistance.current = newDist
+        } else if (e.touches.length === 1 && isDragging) {
+            const dx = e.touches[0].clientX - lastMouse.current.x
+            const dy = e.touches[0].clientY - lastMouse.current.y
+            lastMouse.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }
+            updateTransform(transform.x + dx, transform.y + dy, transform.scale)
+        }
+    }
+
+    const handleTouchEnd = () => {
+        setIsDragging(false)
+        lastTouchDistance.current = null
+        lastTouchCenter.current = null
+    }
+
+    // Toggle zoom on click (Fit / 100%)
+    const handleDoubleClick = (e: React.MouseEvent) => {
+        e.stopPropagation()
+        if (transform.scale > 1.1) {
+            // Reset
+            setTransform({ x: 0, y: 0, scale: 1 })
+        } else {
+            // Zoom to 2.5x
+            setTransform({ x: 0, y: 0, scale: 2.5 })
+        }
+    }
+
+    return (
+        <div
+            ref={containerRef}
+            className="w-full h-full overflow-hidden touch-none relative flex items-center justify-center cursor-grab active:cursor-grabbing"
+            onWheel={handleWheel}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            onClick={(e) => { e.stopPropagation() }} // Prevent closing when clicking background of this internal container
+            onDoubleClick={handleDoubleClick}
+        >
+            <img
+                src={src}
+                alt={alt}
+                draggable={false}
+                style={{
+                    transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`,
+                    transformOrigin: 'center', // Standard center origin, we manually translate 
+                    transition: isDragging || lastTouchDistance.current ? 'none' : 'transform 0.1s ease-out',
+                    willChange: 'transform'
+                }}
+                className="max-w-[95vw] max-h-[90vh] object-contain shadow-2xl block touch-none select-none pointer-events-none"
+            />
+
+            {/* Controls Overlay */}
+            <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-4 z-50 pointer-events-auto">
+                <button
+                    onClick={() => {
+                        if (transform.scale > 1.1) setTransform({ x: 0, y: 0, scale: 1 })
+                        else setTransform({ x: 0, y: 0, scale: 2.5 })
+                    }}
+                    className="bg-white/10 hover:bg-white/20 backdrop-blur-md text-white px-4 py-2.5 rounded-full flex items-center gap-2 text-sm font-medium shadow-xl transition-all border border-white/10"
+                >
+                    {transform.scale > 1.1 ? <ZoomOut size={16} /> : <ZoomIn size={16} />}
+                    {transform.scale > 1.1 ? 'Reset' : 'Zoom In'}
+                </button>
+            </div>
+        </div>
     )
 }
