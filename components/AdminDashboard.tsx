@@ -278,6 +278,13 @@ export default function AdminDashboard() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex items-center justify-end gap-2">
+                        <Link
+                          href={`/admin/sources?shiurId=${shiur.id}`}
+                          className="text-blue-600 hover:text-blue-800"
+                          title="Edit Sources"
+                        >
+                          <FileText className="w-4 h-4" />
+                        </Link>
                         <button
                           onClick={() => {
                             setEditingShiur(shiur)
