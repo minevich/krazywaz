@@ -626,7 +626,10 @@ export default function SourceManager() {
                     ctx.fillText(`${idx + 1}. ${source.name}`, 10, yOffset - 5)
 
                     // Draw image
-                })
+                    ctx.drawImage(img, 0, yOffset, imgWidth, h)
+                    yOffset += h + 40
+                }
+            })
 
             // Store as JSON with individual source images for HTML rendering
             const sourceData = sources.map((source) => ({
