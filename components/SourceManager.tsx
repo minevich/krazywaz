@@ -134,6 +134,56 @@ function clipSourceImage(source: Source, page: PageData): string | null {
         return canvas.toDataURL('image/png')
     }
     return null
+    return null
+}
+
+// Helper to rotate base64 image
+async function rotateImage(base64: string, rotation: number): Promise<string> {
+    if (rotation === 0) return base64
+    return new Promise((resolve) => {
+        const img = new Image()
+        img.onload = () => {
+            const canvas = document.createElement('canvas')
+            const ctx = canvas.getContext('2d')!
+
+            const rad = (rotation * Math.PI) / 180
+            const absCos = Math.abs(Math.cos(rad))
+            const absSin = Math.abs(Math.sin(rad))
+
+            // Calculate new bounding box
+            const w = img.width * absCos + img.height * absSin
+            const h = img.width * absSin + img.height * absCos
+
+            canvas.width = w
+            canvas.height = h
+
+            ctx.translate(w / 2, h / 2)
+            ctx.rotate(rad)
+            ctx.drawImage(img, -img.width / 2, -img.height / 2)
+
+            resolve(canvas.toDataURL('image/png'))
+        }
+        img.src = base64
+    })
+}
+
+// Component to render preview with correct layout flow
+function SourcePreviewImage({ src, rotation, alt, style, className }: { src: string, rotation: number, alt: string, style?: any, className?: string }) {
+    const [rotatedSrc, setRotatedSrc] = useState(src)
+
+    useEffect(() => {
+        // Debounce slightly to avoid heavy canvas ops on every slider pixel
+        const timer = setTimeout(() => {
+            if (rotation === 0) {
+                setRotatedSrc(src)
+            } else {
+                rotateImage(src, rotation).then(setRotatedSrc)
+            }
+        }, 50)
+        return () => clearTimeout(timer)
+    }, [src, rotation])
+
+    return <img src={rotatedSrc} alt={alt} style={style} className={className} />
 }
 
 // ============================================================================
@@ -666,13 +716,29 @@ export default function SourceManager() {
             })
 
             // Store as JSON with individual source images for HTML rendering
-            const sourceData = sources.map((source) => ({
-                id: source.id,
-                name: source.name,
-                image: source.clippedImage,
-                rotation: source.rotation,
-                reference: source.reference,
-                displaySize: source.displaySize || 75
+            // We BAKE the rotation into the image so the frontend doesn't need to handle it
+            // and so aspect ratios are correct in the final image.
+            const sourceData = await Promise.all(sources.map(async (source) => {
+                let finalImage = source.clippedImage
+                let finalRotation = source.rotation
+
+                if (source.rotation !== 0 && source.clippedImage) {
+                    try {
+                        finalImage = await rotateImage(source.clippedImage, source.rotation)
+                        finalRotation = 0 // Reset rotation since it's baked in
+                    } catch (e) {
+                        console.error('Failed to rotate image', e)
+                    }
+                }
+
+                return {
+                    id: source.id,
+                    name: source.name,
+                    image: finalImage,
+                    rotation: finalRotation,
+                    reference: source.reference,
+                    displaySize: source.displaySize || 75
+                }
             }))
 
             // Save as JSON string to sourcesJson field (separate from PDF link in sourceDoc)
@@ -1009,7 +1075,7 @@ export default function SourceManager() {
                                             <span className="text-xs text-orange-500">{source.rotation}°</span>
                                             <button onClick={(e) => { e.stopPropagation(); deleteSource(source.id) }} className="text-red-500 text-sm">×</button>
                                         </div>
-                                        {source.clippedImage && <img src={source.clippedImage} alt="" className="w-full rounded border" />}
+                                        {source.clippedImage && <SourcePreviewImage src={source.clippedImage} rotation={source.rotation} alt="" className="w-full rounded border" />}
                                     </div>
                                 ))}
                             </div>
@@ -1030,60 +1096,75 @@ export default function SourceManager() {
                                     {sources.map((source, idx) => (
                                         <div key={source.id} className="border rounded-lg overflow-hidden shadow-sm bg-white">
                                             {/* Header with controls */}
-                                            <div className="bg-slate-50 px-4 py-3 flex items-center gap-3 flex-wrap">
-                                                <span className="w-7 h-7 bg-blue-600 text-white text-sm font-bold rounded-full flex items-center justify-center flex-shrink-0">{idx + 1}</span>
-                                                <input
-                                                    type="text"
-                                                    value={source.name}
-                                                    onChange={(e) => updateSourceName(source.id, e.target.value)}
-                                                    className="flex-1 min-w-[150px] bg-white px-2 py-1 rounded border focus:border-blue-500 focus:outline-none text-sm"
-                                                    placeholder="Source name..."
-                                                />
-                                                {/* Rotation */}
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-xs text-slate-500">Rotate:</span>
+                                            <div className="bg-slate-50 px-4 py-3 space-y-3">
+                                                {/* Row 1: Index + Name + Delete */}
+                                                <div className="flex items-center gap-3">
+                                                    <span className="w-7 h-7 bg-blue-600 text-white text-sm font-bold rounded-full flex items-center justify-center flex-shrink-0">{idx + 1}</span>
+                                                    <input
+                                                        type="text"
+                                                        value={source.name}
+                                                        onChange={(e) => updateSourceName(source.id, e.target.value)}
+                                                        className="flex-1 min-w-[150px] bg-white px-2 py-1.5 rounded border focus:border-blue-500 focus:outline-none text-sm font-medium shadow-sm"
+                                                        placeholder="Source name..."
+                                                    />
+                                                    <button onClick={() => deleteSource(source.id)} className="text-red-500 hover:bg-red-100 rounded p-1.5 transition-colors" title="Delete source">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /></svg>
+                                                    </button>
+                                                </div>
+
+                                                {/* Row 2: Rotation Slider + Input */}
+                                                <div className="flex items-center gap-3 pl-10">
+                                                    <span className="text-xs text-slate-500 whitespace-nowrap w-16">Rotation:</span>
                                                     <input
                                                         type="range"
                                                         min="-180"
                                                         max="180"
-                                                        step="5"
+                                                        step="1"
                                                         value={source.rotation}
                                                         onChange={(e) => updateSourceRotation(source.id, parseInt(e.target.value) || 0)}
-                                                        className="w-24 h-1.5 bg-slate-300 rounded-full appearance-none cursor-pointer"
+                                                        className="flex-1 h-1.5 bg-slate-300 rounded-full appearance-none cursor-pointer accent-blue-600"
                                                     />
-                                                    <span className="text-xs text-slate-500 w-8 text-right">{source.rotation}°</span>
+                                                    <div className="flex items-center gap-1">
+                                                        <input
+                                                            type="number"
+                                                            value={source.rotation}
+                                                            onChange={(e) => updateSourceRotation(source.id, parseInt(e.target.value) || 0)}
+                                                            className="w-14 text-xs px-1 py-1 border rounded text-center bg-white"
+                                                            min="-180"
+                                                            max="180"
+                                                        />
+                                                        <span className="text-xs text-slate-500 w-2">°</span>
+                                                    </div>
                                                 </div>
-                                                <button onClick={() => deleteSource(source.id)} className="text-red-500 hover:bg-red-100 rounded p-1.5 text-xs">✕</button>
-                                            </div>
 
-                                            {/* Size Slider */}
-                                            <div className="px-4 py-2 bg-slate-100 flex items-center gap-3">
-                                                <span className="text-xs text-slate-600 whitespace-nowrap">Display Size:</span>
-                                                <input
-                                                    type="range"
-                                                    min="25"
-                                                    max="100"
-                                                    step="5"
-                                                    value={source.displaySize}
-                                                    onChange={(e) => updateSourceDisplaySize(source.id, parseInt(e.target.value))}
-                                                    className="flex-1 h-1.5 bg-slate-300 rounded-full appearance-none cursor-pointer"
-                                                />
-                                                <span className="text-xs text-slate-600 font-medium w-10 text-right">{source.displaySize}%</span>
+                                                {/* Row 3: Size Slider */}
+                                                <div className="flex items-center gap-3 pl-10">
+                                                    <span className="text-xs text-slate-500 whitespace-nowrap w-16">Size:</span>
+                                                    <input
+                                                        type="range"
+                                                        min="25"
+                                                        max="100"
+                                                        step="5"
+                                                        value={source.displaySize}
+                                                        onChange={(e) => updateSourceDisplaySize(source.id, parseInt(e.target.value))}
+                                                        className="flex-1 h-1.5 bg-slate-300 rounded-full appearance-none cursor-pointer accent-blue-600"
+                                                    />
+                                                    <span className="text-xs text-slate-600 font-medium w-16 text-right px-1">{source.displaySize}%</span>
+                                                </div>
                                             </div>
 
                                             {/* Image Preview at scaled size */}
                                             {source.clippedImage ? (
                                                 <div className="p-4 bg-slate-50 flex justify-center">
-                                                    <img
+                                                    <SourcePreviewImage
                                                         src={source.clippedImage}
+                                                        rotation={source.rotation}
                                                         alt={source.name}
                                                         style={{
                                                             width: `${source.displaySize}%`,
                                                             maxWidth: '100%',
-                                                            // Apply visual rotation for legacy sources that weren't re-clipped
-                                                            transform: `rotate(${source.rotation}deg)`
                                                         }}
-                                                        className="border rounded shadow-sm transition-transform"
+                                                        className="border rounded shadow-sm transition-all"
                                                     />
                                                 </div>
                                             ) : (
