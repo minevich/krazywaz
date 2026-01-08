@@ -29,6 +29,7 @@ interface Shiur {
     id: string
     title: string
     slug: string
+    sourcesJson?: string | null
 }
 
 type AppState = 'upload' | 'processing' | 'editing' | 'preview'
@@ -84,7 +85,7 @@ async function convertImageToDataUrl(file: File): Promise<PageData> {
 // ============================================================================
 
 function clipSourceImage(source: Source, page: PageData): string | null {
-    if (!page.imageElement) return null
+    if (!page?.imageElement) return null
     const canvas = document.createElement('canvas')
     const ctx = canvas.getContext('2d')
     if (!ctx) return null
@@ -139,13 +140,18 @@ function clipSourceImage(source: Source, page: PageData): string | null {
 // ============================================================================
 
 export default function SourceManager() {
-    const [appState, setAppState] = useState<AppState>('upload')
+    // Current File State (Visual Canvas)
     const [pages, setPages] = useState<PageData[]>([])
-    const [sources, setSources] = useState<Source[]>([])
     const [currentPageIndex, setCurrentPageIndex] = useState(0)
-    const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null)
+
+    const [appState, setAppState] = useState<AppState>('upload')
     const [statusMessage, setStatusMessage] = useState('')
     const [error, setError] = useState<string | null>(null)
+
+    // Sources List (Can include legacy ones not on current canvas)
+    const [sources, setSources] = useState<Source[]>([])
+
+    // Tools
     const [drawMode, setDrawMode] = useState<DrawMode>('rectangle')
 
     // Rectangle drawing
@@ -178,9 +184,14 @@ export default function SourceManager() {
             try {
                 const res = await fetch('/api/shiurim')
                 const data = await res.json()
-                // API returns array directly, not { shiurim: [...] }
                 if (Array.isArray(data)) {
-                    setShiurim(data.map((s: any) => ({ id: s.id, title: s.title, slug: s.slug })))
+                    // Include sourcesJson so we can load existing work
+                    setShiurim(data.map((s: any) => ({
+                        id: s.id,
+                        title: s.title,
+                        slug: s.slug,
+                        sourcesJson: s.sourcesJson
+                    })))
                 } else {
                     console.error('Unexpected shiurim response:', data)
                 }
@@ -192,10 +203,42 @@ export default function SourceManager() {
         loadShiurim()
     }, [])
 
-    // Auto-generate clipped images
+    // Handle Shiur Selection -> Auto-load existing sources
+    useEffect(() => {
+        if (!selectedShiurId) return
+
+        const shiur = shiurim.find(s => s.id === selectedShiurId)
+        if (shiur?.sourcesJson) {
+            try {
+                // If we already have sources, maybe ask user? For now, we append/overwrite?
+                // Logic: If user selects a new shiur, we should probably Clear current work and load the new one.
+                // UNLESS user has "New" stuff.
+                // Simpler: Just overwrite display with this Shiur's sources.
+                // User can then "Add PDF" to append.
+
+                const loaded = JSON.parse(shiur.sourcesJson) as Source[]
+                if (Array.isArray(loaded)) {
+                    // Mark as 'imported' implicitly because they likely won't match the empty 'pages' array
+                    // if we haven't loaded the PDF.
+                    // IMPORTANT: We must ensure IDs are unique if we merge later.
+                    // But here we are Replacing.
+                    setSources(loaded)
+                    // If we have sources but no pages, go to Editing mode (Sidebar only view)
+                    if (pages.length === 0) {
+                        setAppState('editing')
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to parse existing sources', e)
+            }
+        }
+    }, [selectedShiurId, shiurim]) // Dependencies
+
+    // Auto-generate clipped images (ONLY for sources on current canvas pages)
     useEffect(() => {
         const updated = sources.map(s => {
-            if (!s.clippedImage && (s.box || s.polygon)) {
+            // Only clip if we DON'T have a clip yet AND we have the page loaded
+            if (!s.clippedImage && (s.box || s.polygon) && pages[s.pageIndex]) {
                 const page = pages[s.pageIndex]
                 if (page) return { ...s, clippedImage: clipSourceImage(s, page) }
             }
@@ -206,7 +249,7 @@ export default function SourceManager() {
     }, [sources, pages])
 
     // ============================================================================
-    // FILE HANDLING
+    // FILE HANDLING - APPEND MODE
     // ============================================================================
 
     const handleFileUpload = async (file: File) => {
@@ -222,26 +265,59 @@ export default function SourceManager() {
                 setStatusMessage('Loading image...')
                 pageData = [await convertImageToDataUrl(file)]
             }
-            setPages(pageData)
+
+            // APPEND Logic:
+            // 1. Determine new starting page index (current pages length)
+            const startIndex = pages.length
+
+            // 2. Append new pages to existing pages (Visual Stack)
+            // Actually, stacking multiple PDFs vertically in the viewer is hard if we just use 'setPages'.
+            // The canvas renderer usually renders 'currentPageIndex'.
+            // If we just add pages, 'currentPageIndex' logic works if we let user navigate.
+            // So: yes, append pages.
+            setPages(prev => [...prev, ...pageData])
+
             setStatusMessage(`Analyzing ${pageData.length} page(s)...`)
 
-            const allSources: Source[] = []
+            const newSources: Source[] = []
             for (let i = 0; i < pageData.length; i++) {
                 setStatusMessage(`Analyzing page ${i + 1}...`)
-                const pageSources = await analyzePageWithGemini(pageData[i], i)
-                allSources.push(...pageSources)
+                // pageData[i] corresponds to global index (startIndex + i)
+                const globalPageIndex = startIndex + i
+
+                // Note: analyzePageWithGemini needs to return sources with correct pageIndex?
+                // Actually analyzePageWithGemini usually returns 0-based index for single page.
+                // We need to offset it.
+                const pageSources = await analyzePageWithGemini(pageData[i], globalPageIndex)
+                newSources.push(...pageSources)
             }
 
-            for (const source of allSources) {
-                source.clippedImage = clipSourceImage(source, pageData[source.pageIndex])
+            // Clip new sources immediately
+            for (const source of newSources) {
+                // pageIndex is global now.
+                // pageData is the NEW batch. source.pageIndex refers to global 'pages' array.
+                // To find the page image, we look at pageData[source.pageIndex - startIndex].
+                const localPageIndex = source.pageIndex - startIndex
+                if (pageData[localPageIndex]) {
+                    source.clippedImage = clipSourceImage(source, pageData[localPageIndex])
+                }
             }
 
-            setSources(allSources)
-            setStatusMessage(allSources.length > 0 ? `Found ${allSources.length} sources` : 'Draw sources manually')
+            // Append new sources to existing
+            setSources(prev => [...prev, ...newSources])
+
+            setStatusMessage(newSources.length > 0 ? `Found ${newSources.length} new sources` : 'Draw sources manually')
+
+            // Switch to the first NEW page
+            setCurrentPageIndex(startIndex)
             setAppState('editing')
+
         } catch (err) {
+            console.error(err)
             setError(String(err))
-            setAppState('upload')
+            // Only reset to upload if we have NO pages at all? default: stay in processing or go back
+            if (pages.length === 0) setAppState('upload')
+            else setAppState('editing') // Go back to editing existing
         }
     }
 
@@ -550,10 +626,7 @@ export default function SourceManager() {
                     ctx.fillText(`${idx + 1}. ${source.name}`, 10, yOffset - 5)
 
                     // Draw image
-                    ctx.drawImage(img, 0, yOffset, imgWidth, h)
-                    yOffset += h + 40
-                }
-            })
+                })
 
             // Store as JSON with individual source images for HTML rendering
             const sourceData = sources.map((source) => ({
@@ -597,54 +670,109 @@ export default function SourceManager() {
         setSaving(false)
     }
 
+    // Handle Shiur Selection -> Auto-load existing sources
+    useEffect(() => {
+        if (!selectedShiurId) return
+
+        const shiur = shiurim.find(s => s.id === selectedShiurId)
+        if (shiur?.sourcesJson) {
+            try {
+                const loaded = JSON.parse(shiur.sourcesJson) as Source[]
+                if (Array.isArray(loaded)) {
+                    setSources(loaded)
+                    // If we have sources but no pages, go to Preview mode so user can see/edit the list
+                    // They can then click "Add PDF" to upload a document
+                    if (pages.length === 0) {
+                        setAppState('preview')
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to parse existing sources', e)
+            }
+        }
+    }, [selectedShiurId, shiurim, pages.length]) // Dependencies
+
+    // Auto-generate clipped images (ONLY for sources on current canvas pages)
+    useEffect(() => {
+        const updated = sources.map(s => {
+            // Only clip if we DON'T have a clip yet AND we have the page loaded
+            if (!s.clippedImage && (s.box || s.polygon) && pages[s.pageIndex]) {
+                const page = pages[s.pageIndex]
+                if (page) return { ...s, clippedImage: clipSourceImage(s, page) }
+            }
+            return s
+        })
+        const hasChanges = updated.some((s, i) => s.clippedImage !== sources[i].clippedImage)
+        if (hasChanges) setSources(updated)
+    }, [sources, pages])
+
     // ============================================================================
     // RENDER
     // ============================================================================
 
     return (
         <div className="h-screen flex flex-col bg-slate-100">
-            {/* HEADER - Only show when editing/preview */}
-            {(appState === 'editing' || appState === 'preview') && pages.length > 0 && (
-                <header className="bg-white border-b px-4 py-2 flex items-center justify-between shadow-sm">
-                    <h1 className="text-lg font-bold text-slate-800">📜 Source Clipper</h1>
+            {/* HEADER - Show when we have content (pages OR sources) */}
+            {(appState === 'editing' || appState === 'preview' || sources.length > 0) && (
+                <header className="bg-white border-b px-4 py-2 flex items-center justify-between shadow-sm sticky top-0 z-10">
+                    <div className="flex items-center gap-4">
+                        <h1 className="text-lg font-bold text-slate-800">📜 Source Clipper</h1>
+
+                        {/* Add PDF Button - Always available here */}
+                        <button
+                            onClick={() => setAppState('upload')}
+                            className="text-xs flex items-center gap-1 bg-blue-50 text-blue-600 px-2 py-1.5 rounded hover:bg-blue-100 transition-colors font-medium border border-blue-100"
+                        >
+                            <span>+</span> Add PDF
+                        </button>
+                    </div>
 
                     <div className="flex items-center gap-2 text-sm">
-                        {/* Draw mode */}
-                        <div className="flex bg-slate-100 rounded p-0.5">
-                            <button onClick={() => { setDrawMode('rectangle'); setPolygonPoints([]) }} className={`px-2 py-1 rounded ${drawMode === 'rectangle' ? 'bg-white shadow' : ''}`}>▭ Rect</button>
-                            <button onClick={() => setDrawMode('polygon')} className={`px-2 py-1 rounded ${drawMode === 'polygon' ? 'bg-white shadow' : ''}`}>⬡ Poly</button>
-                        </div>
-
-                        {polygonPoints.length > 0 && (
+                        {/* Draw mode (Only relevant in Edit mode with pages) */}
+                        {appState === 'editing' && pages.length > 0 && (
                             <>
-                                <span className="text-slate-500">{polygonPoints.length} pts</span>
-                                <button onClick={finishPolygon} disabled={polygonPoints.length < 3} className="px-2 py-1 bg-green-500 text-white rounded disabled:opacity-50">✓</button>
-                                <button onClick={() => setPolygonPoints([])} className="px-2 py-1 bg-red-500 text-white rounded">✗</button>
+                                <div className="flex bg-slate-100 rounded p-0.5">
+                                    <button onClick={() => { setDrawMode('rectangle'); setPolygonPoints([]) }} className={`px-2 py-1 rounded ${drawMode === 'rectangle' ? 'bg-white shadow' : ''}`}>▭ Rect</button>
+                                    <button onClick={() => setDrawMode('polygon')} className={`px-2 py-1 rounded ${drawMode === 'polygon' ? 'bg-white shadow' : ''}`}>⬡ Poly</button>
+                                </div>
+
+                                {polygonPoints.length > 0 && (
+                                    <>
+                                        <span className="text-slate-500">{polygonPoints.length} pts</span>
+                                        <button onClick={finishPolygon} disabled={polygonPoints.length < 3} className="px-2 py-1 bg-green-500 text-white rounded disabled:opacity-50">✓</button>
+                                        <button onClick={() => setPolygonPoints([])} className="px-2 py-1 bg-red-500 text-white rounded">✗</button>
+                                    </>
+                                )}
                             </>
                         )}
 
-                        {/* Page nav */}
-                        <div className="flex items-center gap-1 bg-slate-100 rounded px-2 py-1">
-                            <button onClick={() => setCurrentPageIndex(Math.max(0, currentPageIndex - 1))} disabled={currentPageIndex === 0} className="disabled:opacity-30">←</button>
-                            <span>{currentPageIndex + 1}/{pages.length}</span>
-                            <button onClick={() => setCurrentPageIndex(Math.min(pages.length - 1, currentPageIndex + 1))} disabled={currentPageIndex === pages.length - 1} className="disabled:opacity-30">→</button>
-                        </div>
-
-                        {/* Quick Grid */}
-                        <div className="relative group">
-                            <button className="px-2 py-1 bg-slate-100 hover:bg-slate-200 rounded">Grid</button>
-                            <div className="absolute right-0 top-full mt-1 bg-white border rounded shadow-lg p-1 hidden group-hover:block z-20 min-w-[80px]">
-                                {[2, 3, 4, 5, 6].map(n => (
-                                    <button key={n} onClick={() => applyQuickGrid(n)} className="block w-full text-left px-3 py-1 hover:bg-blue-50 rounded whitespace-nowrap">{n} rows</button>
-                                ))}
+                        {/* Page nav (Only if pages exist) */}
+                        {pages.length > 0 && (
+                            <div className="flex items-center gap-1 bg-slate-100 rounded px-2 py-1">
+                                <button onClick={() => setCurrentPageIndex(Math.max(0, currentPageIndex - 1))} disabled={currentPageIndex === 0} className="disabled:opacity-30">←</button>
+                                <span>{currentPageIndex + 1}/{pages.length}</span>
+                                <button onClick={() => setCurrentPageIndex(Math.min(pages.length - 1, currentPageIndex + 1))} disabled={currentPageIndex === pages.length - 1} className="disabled:opacity-30">→</button>
                             </div>
-                        </div>
+                        )}
 
-                        <button onClick={clearPage} className="px-2 py-1 text-red-600 hover:bg-red-50 rounded">Clear</button>
+                        {/* Quick Grid (Only Edit mode) */}
+                        {appState === 'editing' && pages.length > 0 && (
+                            <div className="relative group">
+                                <button className="px-2 py-1 bg-slate-100 hover:bg-slate-200 rounded">Grid</button>
+                                <div className="absolute right-0 top-full mt-1 bg-white border rounded shadow-lg p-1 hidden group-hover:block z-20 min-w-[80px]">
+                                    {[2, 3, 4, 5, 6].map(n => (
+                                        <button key={n} onClick={() => applyQuickGrid(n)} className="block w-full text-left px-3 py-1 hover:bg-blue-50 rounded whitespace-nowrap">{n} rows</button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {pages.length > 0 && <button onClick={clearPage} className="px-2 py-1 text-red-600 hover:bg-red-50 rounded">Clear</button>}
 
                         {/* View toggle */}
                         <div className="flex bg-slate-100 rounded p-0.5">
-                            <button onClick={() => setAppState('editing')} className={`px-2 py-1 rounded ${appState === 'editing' ? 'bg-white shadow' : ''}`}>Edit</button>
+                            {/* Disable Edit if no pages */}
+                            <button onClick={() => setAppState('editing')} disabled={pages.length === 0} className={`px-2 py-1 rounded ${appState === 'editing' ? 'bg-white shadow' : ''} disabled:opacity-50`}>Edit</button>
                             <button onClick={() => setAppState('preview')} className={`px-2 py-1 rounded ${appState === 'preview' ? 'bg-white shadow' : ''}`}>Preview</button>
                         </div>
 
