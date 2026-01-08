@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
             throw new Error(`Sefaria Search failed: ${searchRes.status}`)
         }
 
-        const searchData = await searchRes.json()
+        const searchData = await searchRes.json() as any
 
         // 5. Map results to candidates
         // result structure might vary, but usually search-wrapper returns an array or hits object
