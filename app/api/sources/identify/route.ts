@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { ImageAnnotatorClient } from '@google-cloud/vision'
 
-// Initialize Vision Client
-// This expects GOOGLE_APPLICATION_CREDENTIALS env var to be set to the path of the JSON key file
-// OR standard Google Cloud auth to be configured.
-const visionClient = new ImageAnnotatorClient()
+// We use the REST API directly to avoid 'grpc' issues in Cloudflare/Edge environments
+const GOOGLE_CLOUD_API_KEY = process.env.GOOGLE_CLOUD_API_KEY || 'AIzaSyAEXa4oYvoHXYUqRq-8UTEOUd9mQd-Va8I'
 
 export async function POST(request: NextRequest) {
     try {
@@ -15,16 +12,36 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ success: false, error: 'No image provided' })
         }
 
-        console.log('--- Starting Identification with Google Vision ---')
+        console.log('--- Starting Identification with Google Vision REST API ---')
 
-        // 1. Convert to Buffer for Vision API
+        // 1. Convert to Base64
         const arrayBuffer = await imageFile.arrayBuffer()
-        const buffer = Buffer.from(arrayBuffer)
+        const base64Image = Buffer.from(arrayBuffer).toString('base64')
 
-        // 2. Call Google Vision API for Text Detection (OCR)
-        console.log('Sending to Vision API...')
-        const [result] = await visionClient.documentTextDetection(buffer)
-        const fullText = result.fullTextAnnotation?.text
+        // 2. Call Google Vision REST API
+        const visionUrl = `https://vision.googleapis.com/v1/images:annotate?key=${GOOGLE_CLOUD_API_KEY}`
+
+        const visionRes = await fetch(visionUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                requests: [
+                    {
+                        image: { content: base64Image },
+                        features: [{ type: 'DOCUMENT_TEXT_DETECTION' }]
+                    }
+                ]
+            })
+        })
+
+        if (!visionRes.ok) {
+            const err = await visionRes.text()
+            console.error('Vision API Error:', err)
+            throw new Error(`Vision API Failed: ${visionRes.status} ${visionRes.statusText}`)
+        }
+
+        const visionData = await visionRes.json()
+        const fullText = visionData.responses?.[0]?.fullTextAnnotation?.text
 
         if (!fullText) {
             console.log('Vision found no text.')
@@ -32,19 +49,15 @@ export async function POST(request: NextRequest) {
         }
 
         console.log(`OCR Complete. Found ${fullText.length} chars.`)
-        // console.log('Snippet:', fullText.substring(0, 100))
 
-        // 3. Clean up text for Search
-        // Take the first ~20 words to get a good distinct phrase, 
-        // jumping over any initial garbage/headers if possible.
-        // For now, we'll just take the first 150 characters or so.
+        // 3. Clean up text for Sefaria Search
+        // Take first ~150 chars, cleaning up extra whitespace
         const cleanText = fullText.replace(/\s+/g, ' ').trim()
-        const searchQuery = cleanText.substring(0, 200) // Search snippet
+        const searchQuery = cleanText.substring(0, 150)
 
         console.log(`Searching Sefaria for: "${searchQuery.substring(0, 50)}..."`)
 
         // 4. Search Sefaria
-        // We use the search-wrapper API or standard search
         const sefariaUrl = `https://www.sefaria.org/api/search-wrapper?q=${encodeURIComponent(searchQuery)}&index_type=text&size=5`
 
         const searchRes = await fetch(sefariaUrl)
@@ -54,22 +67,19 @@ export async function POST(request: NextRequest) {
 
         const searchData = await searchRes.json() as any
 
-        // 5. Map results to candidates
-        // result structure might vary, but usually search-wrapper returns an array or hits object
-        let invalidStructure = false
+        // 5. Map results
         let candidates: any[] = []
 
         if (searchData.hits && searchData.hits.hits) {
             candidates = searchData.hits.hits.map((hit: any) => {
                 const source = hit._source
                 return {
-                    sourceName: source.ref, // e.g. "Berakhot 2a:1"
+                    sourceName: source.ref,
                     sefariaRef: source.ref,
-                    previewText: source.he || source.text || '' // Hebrew or English text found
+                    previewText: source.he || source.text || ''
                 }
             })
         } else if (Array.isArray(searchData)) {
-            // Sometimes legacy wrapper returns array
             candidates = searchData.map((hit: any) => ({
                 sourceName: hit.ref || hit.title,
                 sefariaRef: hit.ref,
@@ -77,20 +87,10 @@ export async function POST(request: NextRequest) {
             }))
         }
 
-        // Filter out empty results
+        // Filter valid
         candidates = candidates.filter(c => c.sourceName && c.sefariaRef)
 
         console.log(`Found ${candidates.length} candidates.`)
-
-        if (candidates.length === 0) {
-            // Fallback: If strict search failed, try searching for just a subset of words (fuzzy)
-            // Or indicate no results.
-            return NextResponse.json({
-                success: true,
-                candidates: [],
-                debugOcr: cleanText.substring(0, 100) // Send back OCR text so user knows what happened
-            })
-        }
 
         return NextResponse.json({
             success: true,
@@ -99,15 +99,6 @@ export async function POST(request: NextRequest) {
 
     } catch (error) {
         console.error('Identification Error:', error)
-
-        // Check for common auth error
-        if (String(error).includes('Could not load the default credentials')) {
-            return NextResponse.json({
-                success: false,
-                error: 'Server Missing Google Credentials. Please check GOOGLE_APPLICATION_CREDENTIALS.'
-            })
-        }
-
         return NextResponse.json({
             success: false,
             error: String(error)
