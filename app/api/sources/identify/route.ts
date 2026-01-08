@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-// Use Google Vision REST API (different from Gemini, no rate limit issues)
-const GOOGLE_CLOUD_API_KEY = process.env.GOOGLE_CLOUD_API_KEY || 'AIzaSyAEXa4oYvoHXYUqRq-8UTEOUd9mQd-Va8I'
+// Use Google Vision REST API with new unrestricted key
+const GOOGLE_CLOUD_API_KEY = process.env.GOOGLE_CLOUD_API_KEY || 'AIzaSyApCvTLhz8CkYpu8Xe2SDY2Ab9oQbB62qg'
 
 export async function POST(request: NextRequest) {
     try {
