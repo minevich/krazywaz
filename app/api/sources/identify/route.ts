@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-// Use Gemini to IDENTIFY the source directly (Option 3)
-// Gemini knows Torah texts and can often recognize sources without external search
+// Use same pattern as analyze route which works
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY
 
 interface GeminiResponse {
@@ -27,16 +26,18 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ success: false, error: 'No image provided' })
         }
 
-        console.log('--- Identifying source with Gemini Vision ---')
+        console.log('--- Identifying source with Gemini ---')
 
-        // Convert to base64
+        // Convert to base64 (same method as analyze route)
         const arrayBuffer = await imageFile.arrayBuffer()
-        const base64 = Buffer.from(arrayBuffer).toString('base64')
+        const base64 = btoa(
+            new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+        )
         const mimeType = imageFile.type || 'image/png'
 
-        // Call Gemini with vision capability
+        // Call Gemini API (same model as analyze route)
         const geminiResponse = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`,
             {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -44,27 +45,25 @@ export async function POST(request: NextRequest) {
                     contents: [{
                         parts: [
                             {
-                                text: `You are an expert in Torah, Talmud, and Jewish texts. Analyze this image of Hebrew/Aramaic text.
+                                text: `You are an expert in Torah, Talmud, and Jewish texts. Look at this image of Hebrew/Aramaic text.
 
-Your task:
-1. READ the text in the image carefully
-2. IDENTIFY what source this is from (Gemara, Mishnah, Rashi, Tosafot, Rambam, Shulchan Aruch, etc.)
-3. Provide the EXACT reference (e.g., "Berakhot 2a", "Rashi on Genesis 1:1", "Mishneh Torah Hilchot Shabbat 1:1")
+TASK: Identify what Torah source this text is from.
 
-Return ONLY a JSON object:
-{
-  "candidates": [
-    {
-      "sourceName": "Human readable name (e.g. 'Rashi on Bereishit 1:1')",
-      "sefariaRef": "Sefaria-compatible reference (e.g. 'Rashi on Genesis 1:1')",
-      "previewText": "First few words of the Hebrew text you see"
-    }
-  ]
-}
+1. READ the Hebrew/Aramaic text in the image
+2. IDENTIFY the source (Gemara, Mishnah, Rashi, Tosafot, Rambam, Shulchan Aruch, Midrash, etc.)
+3. Provide the EXACT reference
 
-If you can identify multiple possible sources (e.g., if unsure), return up to 3 candidates.
-If you cannot identify the source at all, return {"candidates": []}.
-Return ONLY valid JSON, no markdown.`
+Examples of references:
+- "Berakhot 2a" (Talmud)
+- "Rashi on Genesis 1:1" 
+- "Mishneh Torah, Laws of Sabbath 1:1"
+- "Shulchan Aruch, Orach Chaim 1:1"
+
+Return ONLY a JSON object in this exact format, no other text:
+{"candidates":[{"sourceName":"Human readable name","sefariaRef":"Sefaria-compatible reference","previewText":"First few Hebrew words"}]}
+
+If you can identify multiple possible sources, return up to 3 candidates.
+If you cannot identify the source, still return your best guess.`
                             },
                             {
                                 inlineData: {
@@ -76,7 +75,7 @@ Return ONLY valid JSON, no markdown.`
                     }],
                     generationConfig: {
                         temperature: 0.1,
-                        maxOutputTokens: 1024
+                        maxOutputTokens: 2048
                     }
                 })
             }
@@ -88,34 +87,40 @@ Return ONLY valid JSON, no markdown.`
             return NextResponse.json({ success: false, error: `Gemini API Error: ${geminiResponse.status}` })
         }
 
-        const geminiData = await geminiResponse.json() as GeminiResponse
+        const geminiData: GeminiResponse = await geminiResponse.json()
         const responseText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || ''
 
-        console.log('Gemini Response:', responseText.substring(0, 200))
+        console.log('Gemini Response:', responseText.substring(0, 300))
 
-        // Parse JSON response
+        // Parse JSON from response (same pattern as analyze route)
         let result = { candidates: [] as any[] }
         try {
-            // Clean up response (remove markdown code blocks if present)
             let jsonStr = responseText
-                .replace(/```json\s*/g, '')
-                .replace(/```\s*/g, '')
-                .trim()
-
-            result = JSON.parse(jsonStr)
-        } catch (e) {
-            console.error('JSON Parse Error:', e, 'Response:', responseText)
-            // Try to extract JSON object from response
-            const match = responseText.match(/\{[\s\S]*\}/)
-            if (match) {
-                try {
-                    result = JSON.parse(match[0])
-                } catch { }
+            const jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```/)
+            if (jsonMatch) {
+                jsonStr = jsonMatch[1]
+            } else {
+                const plainMatch = responseText.match(/\{[\s\S]*\}/)
+                if (plainMatch) {
+                    jsonStr = plainMatch[0]
+                }
             }
+            result = JSON.parse(jsonStr)
+        } catch (parseError) {
+            console.error('JSON parse error:', parseError, 'Response:', responseText.substring(0, 500))
         }
 
         const candidates = result.candidates || []
         console.log(`Found ${candidates.length} candidates`)
+
+        if (candidates.length === 0) {
+            // Return the raw response for debugging
+            return NextResponse.json({
+                success: true,
+                candidates: [],
+                debug: responseText.substring(0, 200)
+            })
+        }
 
         return NextResponse.json({
             success: true,
