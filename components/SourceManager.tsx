@@ -1040,17 +1040,18 @@ export default function SourceManager() {
                                                     placeholder="Source name..."
                                                 />
                                                 {/* Rotation */}
-                                                <div className="flex items-center gap-1">
+                                                <div className="flex items-center gap-2">
                                                     <span className="text-xs text-slate-500">Rotate:</span>
                                                     <input
-                                                        type="number"
-                                                        value={source.rotation}
-                                                        onChange={(e) => updateSourceRotation(source.id, parseInt(e.target.value) || 0)}
-                                                        className="w-14 text-xs px-2 py-1 border rounded text-center"
+                                                        type="range"
                                                         min="-180"
                                                         max="180"
+                                                        step="5"
+                                                        value={source.rotation}
+                                                        onChange={(e) => updateSourceRotation(source.id, parseInt(e.target.value) || 0)}
+                                                        className="w-24 h-1.5 bg-slate-300 rounded-full appearance-none cursor-pointer"
                                                     />
-                                                    <span className="text-xs text-slate-500">°</span>
+                                                    <span className="text-xs text-slate-500 w-8 text-right">{source.rotation}°</span>
                                                 </div>
                                                 <button onClick={() => deleteSource(source.id)} className="text-red-500 hover:bg-red-100 rounded p-1.5 text-xs">✕</button>
                                             </div>
