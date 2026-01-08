@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import AdminLogin from '@/components/AdminLogin'
 import SourceManager from '@/components/SourceManager'
 import Link from 'next/link'
@@ -53,7 +53,9 @@ export default function SourcesPage() {
             </div>
 
             <div className="max-w-7xl mx-auto px-4 py-8">
-                <SourceManager />
+                <Suspense fallback={<div>Loading source editor...</div>}>
+                    <SourceManager />
+                </Suspense>
             </div>
         </div>
     )
