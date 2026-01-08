@@ -633,23 +633,32 @@ export default function SourceManager() {
             sources.forEach((source, idx) => {
                 if (source.clippedImage && loadedImages[idx]) {
                     const img = loadedImages[idx]
-                    const aspectRatio = img.height / img.width
-                    const h = imgWidth * aspectRatio
+                    const isSide = Math.abs(source.rotation) % 180 === 90
+                    // If rotated 90/270, the displayed height depends on the original WIDTH
+                    // Aspect Ratio = H / W
+                    const effectiveAspect = isSide ? (img.width / img.height) : (img.height / img.width)
+                    const h = imgWidth * effectiveAspect
 
                     // Draw source name
                     ctx.fillStyle = '#1e293b'
                     ctx.font = 'bold 16px system-ui'
                     ctx.fillText(`${idx + 1}. ${source.name}`, 10, yOffset - 5)
 
-                    // Draw image with rotation if needed
+                    // Draw image with rotation
                     ctx.save()
-                    if (source.rotation !== 0) {
-                        // Move to center of image area
-                        ctx.translate(imgWidth / 2, yOffset + h / 2)
-                        ctx.rotate((source.rotation * Math.PI) / 180)
-                        ctx.translate(-imgWidth / 2, -(yOffset + h / 2))
+                    // Move to center of the target visual box
+                    ctx.translate(imgWidth / 2, yOffset + h / 2)
+                    ctx.rotate((source.rotation * Math.PI) / 180)
+
+                    if (isSide) {
+                        // If rotated 90/270, we swap dimensions
+                        // We draw the image such that its "Width" (local X) becomes the Visual Height
+                        // and its "Height" (local Y) becomes the Visual Width
+                        ctx.drawImage(img, -h / 2, -imgWidth / 2, h, imgWidth)
+                    } else {
+                        // Normal 0/180
+                        ctx.drawImage(img, -imgWidth / 2, -h / 2, imgWidth, h)
                     }
-                    ctx.drawImage(img, 0, yOffset, imgWidth, h)
                     ctx.restore()
 
                     yOffset += h + 40
