@@ -1,9 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-// We use the REST API directly to avoid 'grpc' issues in Cloudflare/Edge environments
-const GOOGLE_CLOUD_API_KEY = process.env.GOOGLE_CLOUD_API_KEY || 'AIzaSyAEXa4oYvoHXYUqRq-8UTEOUd9mQd-Va8I'
+// Use Gemini to IDENTIFY the source directly (Option 3)
+// Gemini knows Torah texts and can often recognize sources without external search
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY
+
+interface GeminiResponse {
+    candidates?: Array<{
+        content?: {
+            parts?: Array<{
+                text?: string
+            }>
+        }
+    }>
+}
 
 export async function POST(request: NextRequest) {
+    if (!GEMINI_API_KEY) {
+        return NextResponse.json({ success: false, error: 'GEMINI_API_KEY not configured' })
+    }
+
     try {
         const formData = await request.formData()
         const imageFile = formData.get('image') as File
@@ -12,97 +27,95 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ success: false, error: 'No image provided' })
         }
 
-        console.log('--- Starting Identification with Google Vision REST API ---')
+        console.log('--- Identifying source with Gemini Vision ---')
 
-        // 1. Convert to Base64
+        // Convert to base64
         const arrayBuffer = await imageFile.arrayBuffer()
-        const base64Image = Buffer.from(arrayBuffer).toString('base64')
+        const base64 = Buffer.from(arrayBuffer).toString('base64')
+        const mimeType = imageFile.type || 'image/png'
 
-        // 2. Call Google Vision REST API
-        const visionUrl = `https://vision.googleapis.com/v1/images:annotate?key=${GOOGLE_CLOUD_API_KEY}`
+        // Call Gemini with vision capability
+        const geminiResponse = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [
+                            {
+                                text: `You are an expert in Torah, Talmud, and Jewish texts. Analyze this image of Hebrew/Aramaic text.
 
-        const visionRes = await fetch(visionUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                requests: [
-                    {
-                        image: { content: base64Image },
-                        features: [{ type: 'DOCUMENT_TEXT_DETECTION' }]
+Your task:
+1. READ the text in the image carefully
+2. IDENTIFY what source this is from (Gemara, Mishnah, Rashi, Tosafot, Rambam, Shulchan Aruch, etc.)
+3. Provide the EXACT reference (e.g., "Berakhot 2a", "Rashi on Genesis 1:1", "Mishneh Torah Hilchot Shabbat 1:1")
+
+Return ONLY a JSON object:
+{
+  "candidates": [
+    {
+      "sourceName": "Human readable name (e.g. 'Rashi on Bereishit 1:1')",
+      "sefariaRef": "Sefaria-compatible reference (e.g. 'Rashi on Genesis 1:1')",
+      "previewText": "First few words of the Hebrew text you see"
+    }
+  ]
+}
+
+If you can identify multiple possible sources (e.g., if unsure), return up to 3 candidates.
+If you cannot identify the source at all, return {"candidates": []}.
+Return ONLY valid JSON, no markdown.`
+                            },
+                            {
+                                inlineData: {
+                                    mimeType,
+                                    data: base64
+                                }
+                            }
+                        ]
+                    }],
+                    generationConfig: {
+                        temperature: 0.1,
+                        maxOutputTokens: 1024
                     }
-                ]
-            })
-        })
+                })
+            }
+        )
 
-        if (!visionRes.ok) {
-            const err = await visionRes.text()
-            console.error('Vision API Error:', err)
-            throw new Error(`Vision API Failed: ${visionRes.status} ${visionRes.statusText}`)
+        if (!geminiResponse.ok) {
+            const errorText = await geminiResponse.text()
+            console.error('Gemini API Error:', errorText)
+            return NextResponse.json({ success: false, error: `Gemini API Error: ${geminiResponse.status}` })
         }
 
-        const visionData = await visionRes.json() as any
-        const fullText = visionData.responses?.[0]?.fullTextAnnotation?.text
+        const geminiData = await geminiResponse.json() as GeminiResponse
+        const responseText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || ''
 
-        if (!fullText) {
-            console.log('Vision found no text.')
-            return NextResponse.json({ success: false, error: 'No text detected in image' })
+        console.log('Gemini Response:', responseText.substring(0, 200))
+
+        // Parse JSON response
+        let result = { candidates: [] as any[] }
+        try {
+            // Clean up response (remove markdown code blocks if present)
+            let jsonStr = responseText
+                .replace(/```json\s*/g, '')
+                .replace(/```\s*/g, '')
+                .trim()
+
+            result = JSON.parse(jsonStr)
+        } catch (e) {
+            console.error('JSON Parse Error:', e, 'Response:', responseText)
+            // Try to extract JSON object from response
+            const match = responseText.match(/\{[\s\S]*\}/)
+            if (match) {
+                try {
+                    result = JSON.parse(match[0])
+                } catch { }
+            }
         }
 
-        console.log(`OCR Complete. Found ${fullText.length} chars.`)
-
-        // 3. Clean up text for Sefaria Search
-        // Strategy: 
-        // 1. Remove Nikkud (vowels) if present, as it messes up search
-        // 2. Remove common garbage characters
-        // 3. Take a solid chunk of text (5-15 words) from the MIDDLE if possible to avoid headers
-
-        let cleanText = fullText.replace(/[\u0591-\u05C7]/g, '') // Remove Nikkud
-            .replace(/[^\u05D0-\u05EA\s]/g, ' ') // Keep only Hebrew letters and spaces
-            .replace(/\s+/g, ' ')
-            .trim()
-
-        // If text is very long, try to skip the first few words which might be headers (e.g. "Chapter 1")
-        const words = cleanText.split(' ')
-        const startIndex = words.length > 20 ? 5 : 0
-        const searchQuery = words.slice(startIndex, startIndex + 15).join(' ') // Search 15 words
-
-        console.log(`Searching Sefaria for: "${searchQuery}"`)
-
-        // 4. Search Sefaria
-        // Use 'text' index type for body searches
-        const sefariaUrl = `https://www.sefaria.org/api/search-wrapper?q=${encodeURIComponent(searchQuery)}&index_type=text&size=10`
-
-        const searchRes = await fetch(sefariaUrl)
-        if (!searchRes.ok) {
-            throw new Error(`Sefaria Search failed: ${searchRes.status}`)
-        }
-
-        const searchData = await searchRes.json() as any
-
-        // 5. Map results
-        let candidates: any[] = []
-
-        if (searchData.hits && searchData.hits.hits) {
-            candidates = searchData.hits.hits.map((hit: any) => {
-                const source = hit._source
-                return {
-                    sourceName: source.ref,
-                    sefariaRef: source.ref,
-                    previewText: source.he || source.text || ''
-                }
-            })
-        } else if (Array.isArray(searchData)) {
-            candidates = searchData.map((hit: any) => ({
-                sourceName: hit.ref || hit.title,
-                sefariaRef: hit.ref,
-                previewText: hit.he || hit.text
-            }))
-        }
-
-        // Filter valid
-        candidates = candidates.filter(c => c.sourceName && c.sefariaRef)
-
-        console.log(`Found ${candidates.length} candidates.`)
+        const candidates = result.candidates || []
+        console.log(`Found ${candidates.length} candidates`)
 
         return NextResponse.json({
             success: true,
