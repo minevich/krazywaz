@@ -1,124 +1,113 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { ImageAnnotatorClient } from '@google-cloud/vision'
 
-// Note: Don't use edge runtime here - OpenNext handles this automatically
-
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY
+// Initialize Vision Client
+// This expects GOOGLE_APPLICATION_CREDENTIALS env var to be set to the path of the JSON key file
+// OR standard Google Cloud auth to be configured.
+const visionClient = new ImageAnnotatorClient()
 
 export async function POST(request: NextRequest) {
-    if (!GEMINI_API_KEY) {
-        return NextResponse.json({
-            success: false,
-            error: 'GEMINI_API_KEY not configured',
-        })
-    }
-
     try {
         const formData = await request.formData()
         const imageFile = formData.get('image') as File
 
         if (!imageFile) {
-            return NextResponse.json({
-                success: false,
-                error: 'No image file provided',
-            })
+            return NextResponse.json({ success: false, error: 'No image provided' })
         }
 
-        // Convert to base64
+        console.log('--- Starting Identification with Google Vision ---')
+
+        // 1. Convert to Buffer for Vision API
         const arrayBuffer = await imageFile.arrayBuffer()
-        const base64 = btoa(
-            new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
-        )
-        const mimeType = imageFile.type || 'image/png'
+        const buffer = Buffer.from(arrayBuffer)
 
-        // Call Gemini API (using Flash for speed/cost)
-        // We ask for multiple candidates/interpretations if unclear, but usually one good one is enough.
-        // We explicitly ask for Sefaria-compatible refs.
-        const geminiResponse = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`,
-            {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contents: [{
-                        parts: [
-                            {
-                                text: `You are a helper for a Jewish study app. 
-Analyze this image of a text. It is likely a clipping from a Sefer (Torah book).
-1. OCR the Hebrew text accurately.
-2. Identify the source (Book, Chapter, Verse/Page).
-3. Provide the likely "Sefaria Reference" format (e.g., "Berakhot 2a", "Rashi on Genesis 1:1", "Mishneh Torah, Sabbath 1:1").
-4. If there are multiple possibilities or it's ambiguous, list the top 3 most likely options.
+        // 2. Call Google Vision API for Text Detection (OCR)
+        console.log('Sending to Vision API...')
+        const [result] = await visionClient.documentTextDetection(buffer)
+        const fullText = result.fullTextAnnotation?.text
 
-Return a JSON object in this exact format:
-{
-  "candidates": [
-    {
-      "sourceName": "Name of the source (e.g. 'Rashi on Bereishit 1:1')",
-      "sefariaRef": "Sefaria style ref (e.g. 'Rashi on Genesis 1:1.1')",
-      "previewText": "The beginning of the Hebrew text found..."
-    }
-  ]
-}
-Return ONLY valid JSON.
-`
-                            },
-                            {
-                                inlineData: {
-                                    mimeType,
-                                    data: base64
-                                }
-                            }
-                        ]
-                    }],
-                    generationConfig: {
-                        temperature: 0.1,
-                        maxOutputTokens: 2048,
-                        responseMimeType: "application/json"
-                    }
-                })
-            }
-        )
-
-        if (!geminiResponse.ok) {
-            const errorText = await geminiResponse.text()
-            console.error('Gemini identify error:', errorText)
-            return NextResponse.json({ success: false, error: 'AI Analysis failed' })
+        if (!fullText) {
+            console.log('Vision found no text.')
+            return NextResponse.json({ success: false, error: 'No text detected in image' })
         }
 
-        interface GeminiResponse {
-            candidates?: Array<{
-                content?: {
-                    parts?: Array<{
-                        text?: string
-                    }>
+        console.log(`OCR Complete. Found ${fullText.length} chars.`)
+        // console.log('Snippet:', fullText.substring(0, 100))
+
+        // 3. Clean up text for Search
+        // Take the first ~20 words to get a good distinct phrase, 
+        // jumping over any initial garbage/headers if possible.
+        // For now, we'll just take the first 150 characters or so.
+        const cleanText = fullText.replace(/\s+/g, ' ').trim()
+        const searchQuery = cleanText.substring(0, 200) // Search snippet
+
+        console.log(`Searching Sefaria for: "${searchQuery.substring(0, 50)}..."`)
+
+        // 4. Search Sefaria
+        // We use the search-wrapper API or standard search
+        const sefariaUrl = `https://www.sefaria.org/api/search-wrapper?q=${encodeURIComponent(searchQuery)}&index_type=text&size=5`
+
+        const searchRes = await fetch(sefariaUrl)
+        if (!searchRes.ok) {
+            throw new Error(`Sefaria Search failed: ${searchRes.status}`)
+        }
+
+        const searchData = await searchRes.json()
+
+        // 5. Map results to candidates
+        // result structure might vary, but usually search-wrapper returns an array or hits object
+        let invalidStructure = false
+        let candidates: any[] = []
+
+        if (searchData.hits && searchData.hits.hits) {
+            candidates = searchData.hits.hits.map((hit: any) => {
+                const source = hit._source
+                return {
+                    sourceName: source.ref, // e.g. "Berakhot 2a:1"
+                    sefariaRef: source.ref,
+                    previewText: source.he || source.text || '' // Hebrew or English text found
                 }
-            }>
+            })
+        } else if (Array.isArray(searchData)) {
+            // Sometimes legacy wrapper returns array
+            candidates = searchData.map((hit: any) => ({
+                sourceName: hit.ref || hit.title,
+                sefariaRef: hit.ref,
+                previewText: hit.he || hit.text
+            }))
         }
 
-        const geminiData = await geminiResponse.json() as GeminiResponse
-        const responseText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || ''
+        // Filter out empty results
+        candidates = candidates.filter(c => c.sourceName && c.sefariaRef)
 
-        // Parse JSON
-        let result = { candidates: [] }
-        try {
-            // It should be strictly JSON due to responseMimeType, but safety check
-            result = JSON.parse(responseText)
-        } catch (e) {
-            console.error('Failed to parse Gemini JSON', responseText)
-            // Fallback: try to extract json block
-            const jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```/) || responseText.match(/\{[\s\S]*\}/)
-            if (jsonMatch) {
-                try { result = JSON.parse(jsonMatch[0] || jsonMatch[1]) } catch { }
-            }
+        console.log(`Found ${candidates.length} candidates.`)
+
+        if (candidates.length === 0) {
+            // Fallback: If strict search failed, try searching for just a subset of words (fuzzy)
+            // Or indicate no results.
+            return NextResponse.json({
+                success: true,
+                candidates: [],
+                debugOcr: cleanText.substring(0, 100) // Send back OCR text so user knows what happened
+            })
         }
 
         return NextResponse.json({
             success: true,
-            candidates: result.candidates || []
+            candidates
         })
 
     } catch (error) {
-        console.error('Identify error:', error)
+        console.error('Identification Error:', error)
+
+        // Check for common auth error
+        if (String(error).includes('Could not load the default credentials')) {
+            return NextResponse.json({
+                success: false,
+                error: 'Server Missing Google Credentials. Please check GOOGLE_APPLICATION_CREDENTIALS.'
+            })
+        }
+
         return NextResponse.json({
             success: false,
             error: String(error)
