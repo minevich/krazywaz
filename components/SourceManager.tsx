@@ -143,6 +143,7 @@ export default function SourceManager() {
     // Current File State (Visual Canvas)
     const [pages, setPages] = useState<PageData[]>([])
     const [currentPageIndex, setCurrentPageIndex] = useState(0)
+    const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null)
 
     const [appState, setAppState] = useState<AppState>('upload')
     const [statusMessage, setStatusMessage] = useState('')
