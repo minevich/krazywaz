@@ -664,12 +664,16 @@ export default function SourceManager() {
             formData.append('image', file)
 
             const apiRes = await fetch('/api/sources/identify', { method: 'POST', body: formData })
-            const data = await apiRes.json() as { success: boolean, candidates: Array<{ sourceName: string, sefariaRef: string, previewText: string }> }
+            const data = await apiRes.json() as { success: boolean, candidates: Array<{ sourceName: string, sefariaRef: string, previewText: string }>, error?: string, debug?: string }
+
+            console.log('Identify API Response:', data)
 
             if (data.success && data.candidates?.length > 0) {
                 setIdentifyResults(data.candidates)
             } else {
-                alert('No sources identified. Try adjusting the crop.')
+                // Show actual error or debug info
+                const msg = data.error || data.debug || 'No sources identified'
+                alert(`Identification failed: ${msg}`)
                 setIdentifyResults(null)
             }
         } catch (e) {
