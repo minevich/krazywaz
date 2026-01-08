@@ -35,9 +35,9 @@ export async function POST(request: NextRequest) {
         )
         const mimeType = imageFile.type || 'image/png'
 
-        // Call Gemini API (same model as analyze route)
+        // Call Gemini API (using stable 1.5-flash for higher rate limits)
         const geminiResponse = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`,
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
             {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
