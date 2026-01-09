@@ -14,6 +14,8 @@ interface GeminiResponse {
 }
 
 export async function POST(request: NextRequest) {
+    const debugLog: string[] = []
+
     try {
         const formData = await request.formData()
         const imageFile = formData.get('image') as File
@@ -33,8 +35,8 @@ export async function POST(request: NextRequest) {
         // ============================================
 
         if (GEMINI_API_KEY) {
+            debugLog.push('Trying Gemini...')
             try {
-                console.log('Trying Gemini...')
                 const geminiResponse = await fetch(
                     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`,
                     {
@@ -52,10 +54,12 @@ export async function POST(request: NextRequest) {
                     }
                 )
 
+                debugLog.push(`Gemini status: ${geminiResponse.status}`)
+
                 if (geminiResponse.ok) {
                     const geminiData: GeminiResponse = await geminiResponse.json()
                     const responseText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || ''
-                    console.log('Gemini:', responseText.substring(0, 150))
+                    debugLog.push(`Gemini text: ${responseText.substring(0, 100)}`)
 
                     try {
                         const match = responseText.match(/\{[\s\S]*\}/)
@@ -70,26 +74,29 @@ export async function POST(request: NextRequest) {
                                         source: 'Gemini AI'
                                     })
                                 }
+                                debugLog.push(`Gemini found ${candidates.length} candidates`)
                             }
                         }
                     } catch (e) {
-                        console.error('Gemini parse error')
+                        debugLog.push(`Gemini parse error: ${e}`)
                     }
                 }
             } catch (e) {
-                console.error('Gemini error:', e)
+                debugLog.push(`Gemini error: ${e}`)
             }
+        } else {
+            debugLog.push('No GEMINI_API_KEY configured')
         }
 
         if (candidates.length > 0) {
-            return NextResponse.json({ success: true, candidates })
+            return NextResponse.json({ success: true, candidates, debug: debugLog })
         }
 
         // ============================================
-        // STRATEGY 2: OCR + Sefaria Search (proper API)
+        // STRATEGY 2: OCR + Sefaria Search
         // ============================================
 
-        console.log('Using OCR + Sefaria...')
+        debugLog.push('Falling back to OCR + Sefaria...')
 
         const visionRes = await fetch(
             `https://vision.googleapis.com/v1/images:annotate?key=${GOOGLE_CLOUD_API_KEY}`,
@@ -105,125 +112,73 @@ export async function POST(request: NextRequest) {
             }
         )
 
+        debugLog.push(`Vision status: ${visionRes.status}`)
+
         if (!visionRes.ok) {
-            return NextResponse.json({ success: false, error: `Vision API Error: ${visionRes.status}` })
+            const errText = await visionRes.text()
+            debugLog.push(`Vision error: ${errText.substring(0, 100)}`)
+            return NextResponse.json({ success: false, error: `Vision API Error: ${visionRes.status}`, debug: debugLog })
         }
 
         const visionData = await visionRes.json() as any
         const fullText = visionData.responses?.[0]?.fullTextAnnotation?.text
 
         if (!fullText) {
-            return NextResponse.json({ success: false, error: 'No text detected' })
+            debugLog.push('No text detected in image')
+            return NextResponse.json({ success: false, error: 'No text detected', debug: debugLog })
         }
 
-        // Clean text - remove nikkud but keep Hebrew
+        debugLog.push(`OCR found ${fullText.length} chars`)
+
+        // Clean text
         const cleanText = fullText
-            .replace(/[\u0591-\u05C7]/g, '') // Remove nikkud/taamim
-            .replace(/[^\u05D0-\u05EA\s]/g, ' ') // Keep only Hebrew letters
+            .replace(/[\u0591-\u05C7]/g, '')
+            .replace(/[^\u05D0-\u05EA\s]/g, ' ')
             .replace(/\s+/g, ' ')
             .trim()
 
         const words = cleanText.split(' ').filter((w: string) => w.length > 1)
-        const searchQuery = words.slice(0, 10).join(' ')
+        const searchQuery = words.slice(0, 8).join(' ')
 
-        console.log('OCR search query:', searchQuery)
+        debugLog.push(`Search query: ${searchQuery}`)
 
-        // Sefaria ElasticSearch API - proper format per their docs
-        // Using naive_lemmatizer with slop for flexible Hebrew matching
+        // Try Sefaria simple search wrapper first (more reliable)
         try {
-            const searchBody = {
-                size: 10,
-                highlight: {
-                    pre_tags: ['<b>'],
-                    post_tags: ['</b>'],
-                    fields: {
-                        naive_lemmatizer: { fragment_size: 200 }
-                    }
-                },
-                query: {
-                    match_phrase: {
-                        naive_lemmatizer: {
-                            query: searchQuery,
-                            slop: 10  // Allow up to 10 words between terms
-                        }
-                    }
-                }
-            }
+            const simpleUrl = `https://www.sefaria.org/api/search-wrapper?q=${encodeURIComponent(searchQuery)}&type=text&size=5`
+            debugLog.push(`Calling: ${simpleUrl}`)
 
-            console.log('Calling Sefaria API...')
-            const sefariaRes = await fetch('https://www.sefaria.org/api/search/text/_search', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(searchBody),
+            const sefariaRes = await fetch(simpleUrl, {
                 signal: AbortSignal.timeout(15000)
             })
 
+            debugLog.push(`Sefaria status: ${sefariaRes.status}`)
+
             if (sefariaRes.ok) {
                 const data = await sefariaRes.json() as any
-                const hits = data.hits?.hits || []
-                console.log(`Sefaria returned ${hits.length} hits`)
+                debugLog.push(`Sefaria response keys: ${Object.keys(data).join(', ')}`)
 
-                for (const hit of hits.slice(0, 5)) {
-                    const source = hit._source
-                    const highlight = hit.highlight?.naive_lemmatizer?.[0] || ''
-                    if (source?.ref) {
-                        candidates.push({
-                            sourceName: source.ref,
-                            sefariaRef: source.ref,
-                            previewText: highlight || (source.he || '').substring(0, 100),
-                            source: 'Sefaria'
-                        })
-                    }
-                }
-            } else {
-                const errText = await sefariaRes.text()
-                console.error('Sefaria error:', sefariaRes.status, errText.substring(0, 200))
-            }
-        } catch (e) {
-            console.error('Sefaria fetch error:', e)
-        }
+                const hits = data.hits?.hits || data || []
+                debugLog.push(`Hits count: ${Array.isArray(hits) ? hits.length : 'not array'}`)
 
-        // If Sefaria failed, try exact match
-        if (candidates.length === 0) {
-            try {
-                const exactBody = {
-                    size: 10,
-                    query: {
-                        match_phrase: {
-                            exact: {
-                                query: searchQuery
-                            }
-                        }
-                    }
-                }
-
-                const exactRes = await fetch('https://www.sefaria.org/api/search/text/_search', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(exactBody),
-                    signal: AbortSignal.timeout(10000)
-                })
-
-                if (exactRes.ok) {
-                    const data = await exactRes.json() as any
-                    const hits = data.hits?.hits || []
-                    console.log(`Sefaria exact returned ${hits.length} hits`)
-
+                if (Array.isArray(hits)) {
                     for (const hit of hits.slice(0, 5)) {
-                        const source = hit._source
+                        const source = hit._source || hit
                         if (source?.ref) {
                             candidates.push({
                                 sourceName: source.ref,
                                 sefariaRef: source.ref,
                                 previewText: (source.he || '').substring(0, 100),
-                                source: 'Sefaria (exact)'
+                                source: 'Sefaria'
                             })
                         }
                     }
                 }
-            } catch (e) {
-                console.error('Sefaria exact error:', e)
+            } else {
+                const errText = await sefariaRes.text()
+                debugLog.push(`Sefaria error: ${errText.substring(0, 100)}`)
             }
+        } catch (e) {
+            debugLog.push(`Sefaria fetch error: ${e}`)
         }
 
         // Return results
@@ -240,11 +195,12 @@ export async function POST(request: NextRequest) {
             success: true,
             candidates,
             ocrText: cleanText.substring(0, 100),
-            searchQuery
+            searchQuery,
+            debug: debugLog
         })
 
     } catch (error) {
-        console.error('Error:', error)
-        return NextResponse.json({ success: false, error: String(error) })
+        debugLog.push(`Fatal error: ${error}`)
+        return NextResponse.json({ success: false, error: String(error), debug: debugLog })
     }
 }
