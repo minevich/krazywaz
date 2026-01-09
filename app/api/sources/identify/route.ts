@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY
+// Fallback to known working key if env not set in Cloudflare
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'AIzaSyAEXa4oYvoHXYUqRq-8UTEOUd9mQd-Va8I'
 
 interface GeminiResponse {
     candidates?: Array<{
