@@ -142,55 +142,101 @@ export async function POST(request: NextRequest) {
 
         debugLog.push(`Search query: ${searchQuery}`)
 
-        // Use Sefaria's ElasticSearch API directly (POST with JSON body)
+        // Strategy 1: Try Sefaria's name/autocomplete API (public, no auth needed)
         try {
-            const searchBody = {
-                size: 10,
-                query: {
-                    match_phrase: {
-                        naive_lemmatizer: {
-                            query: searchQuery,
-                            slop: 5
-                        }
-                    }
-                }
-            }
+            const nameUrl = `https://www.sefaria.org/api/name/${encodeURIComponent(searchQuery.substring(0, 50))}?limit=10`
+            debugLog.push(`Trying name API...`)
 
-            debugLog.push(`Calling ElasticSearch API...`)
+            const nameRes = await fetch(nameUrl, { signal: AbortSignal.timeout(10000) })
+            debugLog.push(`Name API status: ${nameRes.status}`)
 
-            const sefariaRes = await fetch('https://www.sefaria.org/api/search/text/_search', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(searchBody),
-                signal: AbortSignal.timeout(15000)
-            })
+            if (nameRes.ok) {
+                const nameData = await nameRes.json() as any
 
-            debugLog.push(`Sefaria status: ${sefariaRes.status}`)
-
-            if (sefariaRes.ok) {
-                const data = await sefariaRes.json() as any
-                debugLog.push(`Response keys: ${Object.keys(data).join(', ')}`)
-
-                const hits = data.hits?.hits || []
-                debugLog.push(`Hits found: ${hits.length}`)
-
-                for (const hit of hits.slice(0, 5)) {
-                    const source = hit._source
-                    if (source?.ref) {
+                // Check for completions
+                if (nameData.completions?.length > 0) {
+                    debugLog.push(`Found ${nameData.completions.length} name completions`)
+                    for (const comp of nameData.completions.slice(0, 3)) {
                         candidates.push({
-                            sourceName: source.ref,
-                            sefariaRef: source.ref,
-                            previewText: (source.he || source.text || '').substring(0, 100),
-                            source: 'Sefaria'
+                            sourceName: comp,
+                            sefariaRef: comp,
+                            previewText: searchQuery,
+                            source: 'Sefaria Name'
                         })
                     }
                 }
-            } else {
-                const errText = await sefariaRes.text()
-                debugLog.push(`Sefaria error: ${errText.substring(0, 200)}`)
             }
         } catch (e) {
-            debugLog.push(`Sefaria fetch error: ${e}`)
+            debugLog.push(`Name API error: ${e}`)
+        }
+
+        // Strategy 2: Try find-refs API if name didn't work
+        if (candidates.length === 0) {
+            try {
+                const findUrl = `https://www.sefaria.org/api/find-refs?text=${encodeURIComponent(searchQuery)}`
+                debugLog.push(`Trying find-refs API...`)
+
+                const findRes = await fetch(findUrl, { signal: AbortSignal.timeout(10000) })
+                debugLog.push(`Find-refs status: ${findRes.status}`)
+
+                if (findRes.ok) {
+                    const findData = await findRes.json() as any
+
+                    if (findData.refs?.length > 0) {
+                        debugLog.push(`Found ${findData.refs.length} refs`)
+                        for (const ref of findData.refs.slice(0, 5)) {
+                            candidates.push({
+                                sourceName: ref,
+                                sefariaRef: ref,
+                                previewText: searchQuery,
+                                source: 'Sefaria Refs'
+                            })
+                        }
+                    }
+                }
+            } catch (e) {
+                debugLog.push(`Find-refs error: ${e}`)
+            }
+        }
+
+        // Strategy 3: Try the bulktext search
+        if (candidates.length === 0) {
+            try {
+                const bulkUrl = `https://www.sefaria.org/api/search-wrapper`
+                debugLog.push(`Trying search-wrapper POST...`)
+
+                const bulkRes = await fetch(bulkUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        query: searchQuery,
+                        type: 'text',
+                        size: 5
+                    }),
+                    signal: AbortSignal.timeout(15000)
+                })
+                debugLog.push(`Search-wrapper POST status: ${bulkRes.status}`)
+
+                if (bulkRes.ok) {
+                    const bulkData = await bulkRes.json() as any
+                    debugLog.push(`Response keys: ${Object.keys(bulkData).join(', ')}`)
+
+                    const hits = bulkData.hits?.hits || []
+                    for (const hit of hits.slice(0, 5)) {
+                        const source = hit._source
+                        if (source?.ref) {
+                            candidates.push({
+                                sourceName: source.ref,
+                                sefariaRef: source.ref,
+                                previewText: (source.he || '').substring(0, 100),
+                                source: 'Sefaria'
+                            })
+                        }
+                    }
+                }
+            } catch (e) {
+                debugLog.push(`Search-wrapper error: ${e}`)
+            }
         }
 
         // Return results
