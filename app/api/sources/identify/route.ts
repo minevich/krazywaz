@@ -55,33 +55,43 @@ export async function POST(request: NextRequest) {
         console.log(`OCR found ${fullText.length} chars`)
 
         // ============================================
-        // Step 2: Clean OCR text for search
+        // Step 2: Clean OCR text - keep more characters
         // ============================================
 
-        // Remove nikkud (vowels) and clean up whitespace
+        // Remove nikkud but keep more text
         let cleanText = fullText
-            .replace(/[\u0591-\u05C7]/g, '') // Remove nikkud/taamim
-            .replace(/[^\u05D0-\u05EA\s]/g, ' ') // Keep only Hebrew letters + space
+            .replace(/[\u0591-\u05C7]/g, '') // Remove nikkud/taamim only
             .replace(/\s+/g, ' ')
             .trim()
 
-        // Take a good search phrase (skip first few words which might be headers)
-        const words = cleanText.split(' ').filter((w: string) => w.length > 1)
-        const startIdx = words.length > 15 ? 3 : 0
-        const searchPhrase = words.slice(startIdx, startIdx + 10).join(' ')
+        // Get ALL Hebrew words
+        const hebrewOnly = cleanText
+            .replace(/[^\u05D0-\u05EA\s]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
 
-        console.log(`Search phrase: "${searchPhrase}"`)
+        const words = hebrewOnly.split(' ').filter((w: string) => w.length > 1)
+
+        // Use a larger chunk - 25 words for better matching
+        const searchPhrase = words.slice(0, 25).join(' ')
+        // Also create a shorter exact phrase for precise matching
+        const exactPhrase = words.slice(0, 8).join(' ')
+
+        console.log(`Full phrase (25 words): "${searchPhrase}"`)
+        console.log(`Exact phrase (8 words): "${exactPhrase}"`)
 
         const candidates: Array<{ sourceName: string, sefariaRef: string, previewText: string, source?: string }> = []
 
         // ============================================
-        // Step 3: Search Sefaria
+        // Step 3: Search Sefaria with EXACT phrase first
         // ============================================
 
         try {
-            const sefariaUrl = `https://www.sefaria.org/api/search-wrapper?q=${encodeURIComponent(searchPhrase)}&type=text&size=5`
-            console.log('Searching Sefaria...')
-            const sefariaRes = await fetch(sefariaUrl, { signal: AbortSignal.timeout(5000) })
+            // Use quotes for exact phrase matching
+            const exactQuery = `"${exactPhrase}"`
+            const sefariaUrl = `https://www.sefaria.org/api/search-wrapper?q=${encodeURIComponent(exactQuery)}&type=text&size=5`
+            console.log('Searching Sefaria (exact)...')
+            const sefariaRes = await fetch(sefariaUrl, { signal: AbortSignal.timeout(8000) })
 
             if (sefariaRes.ok) {
                 const sefariaData = await sefariaRes.json() as any
@@ -93,24 +103,55 @@ export async function POST(request: NextRequest) {
                         candidates.push({
                             sourceName: source.ref,
                             sefariaRef: source.ref,
-                            previewText: (source.he || source.text || '').substring(0, 100),
-                            source: 'Sefaria'
+                            previewText: (source.he || source.text || '').substring(0, 150),
+                            source: 'Sefaria (exact match)'
                         })
                     }
                 }
-                console.log(`Sefaria found ${candidates.length} results`)
+                console.log(`Sefaria exact found ${candidates.length} results`)
             }
         } catch (e) {
-            console.error('Sefaria search error:', e)
+            console.error('Sefaria exact search error:', e)
         }
 
         // ============================================
-        // Step 4: Search HebrewBooks
+        // Step 4: If no exact match, try broader search
+        // ============================================
+
+        if (candidates.length === 0) {
+            try {
+                const sefariaUrl = `https://www.sefaria.org/api/search-wrapper?q=${encodeURIComponent(searchPhrase)}&type=text&size=8`
+                console.log('Searching Sefaria (broad)...')
+                const sefariaRes = await fetch(sefariaUrl, { signal: AbortSignal.timeout(8000) })
+
+                if (sefariaRes.ok) {
+                    const sefariaData = await sefariaRes.json() as any
+                    const hits = sefariaData.hits?.hits || sefariaData || []
+
+                    for (const hit of hits.slice(0, 5)) {
+                        const source = hit._source || hit
+                        if (source.ref) {
+                            candidates.push({
+                                sourceName: source.ref,
+                                sefariaRef: source.ref,
+                                previewText: (source.he || source.text || '').substring(0, 150),
+                                source: 'Sefaria'
+                            })
+                        }
+                    }
+                    console.log(`Sefaria broad found ${candidates.length} results`)
+                }
+            } catch (e) {
+                console.error('Sefaria broad search error:', e)
+            }
+        }
+
+        // ============================================
+        // Step 5: Search HebrewBooks
         // ============================================
 
         try {
-            // HebrewBooks has a search page - we'll use their AJAX endpoint
-            const hbUrl = `https://hebrewbooks.org/ajax.ashx?type=search&val=${encodeURIComponent(searchPhrase.substring(0, 50))}`
+            const hbUrl = `https://hebrewbooks.org/ajax.ashx?type=search&val=${encodeURIComponent(exactPhrase)}`
             console.log('Searching HebrewBooks...')
             const hbRes = await fetch(hbUrl, {
                 signal: AbortSignal.timeout(5000),
@@ -119,8 +160,6 @@ export async function POST(request: NextRequest) {
 
             if (hbRes.ok) {
                 const hbText = await hbRes.text()
-                // HebrewBooks returns HTML or JSON depending on the query
-                // Try to extract book references from the response
                 const bookMatches = hbText.match(/hebrewbooks\.org\/\d+/g)
                 if (bookMatches) {
                     for (const match of bookMatches.slice(0, 2)) {
@@ -139,53 +178,28 @@ export async function POST(request: NextRequest) {
         }
 
         // ============================================
-        // Step 5: Try Sefaria name lookup as fallback
-        // ============================================
-
-        if (candidates.length === 0 && searchPhrase.length > 10) {
-            try {
-                const lookupUrl = `https://www.sefaria.org/api/name/${encodeURIComponent(searchPhrase.substring(0, 50))}`
-                const lookupRes = await fetch(lookupUrl, { signal: AbortSignal.timeout(3000) })
-
-                if (lookupRes.ok) {
-                    const lookupData = await lookupRes.json() as any
-                    if (lookupData.completions) {
-                        for (const comp of lookupData.completions.slice(0, 3)) {
-                            candidates.push({
-                                sourceName: comp,
-                                sefariaRef: comp,
-                                previewText: searchPhrase,
-                                source: 'Sefaria Lookup'
-                            })
-                        }
-                    }
-                }
-            } catch (e) {
-                console.error('Lookup error:', e)
-            }
-        }
-
-        // ============================================
-        // Return results
+        // Return results with OCR text for debugging
         // ============================================
 
         if (candidates.length === 0) {
             return NextResponse.json({
                 success: true,
                 candidates: [{
-                    sourceName: 'OCR Result (no match found)',
+                    sourceName: 'No match found',
                     sefariaRef: '',
-                    previewText: cleanText.substring(0, 200),
+                    previewText: hebrewOnly.substring(0, 200),
                     source: 'OCR Only'
                 }],
-                ocrText: cleanText
+                ocrText: hebrewOnly,
+                searchQuery: searchPhrase
             })
         }
 
         return NextResponse.json({
             success: true,
             candidates,
-            ocrText: cleanText.substring(0, 200)
+            ocrText: hebrewOnly.substring(0, 200),
+            searchQuery: searchPhrase
         })
 
     } catch (error) {
