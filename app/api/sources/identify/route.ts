@@ -142,38 +142,44 @@ export async function POST(request: NextRequest) {
 
         debugLog.push(`Search query: ${searchQuery}`)
 
-        // Strategy 1: Try Sefaria's name/autocomplete API (public, no auth needed)
+        // Strategy 1: Try Sefaria's linker/find-refs API (finds citations in text)
         try {
-            const nameUrl = `https://www.sefaria.org/api/name/${encodeURIComponent(searchQuery.substring(0, 50))}?limit=10`
-            debugLog.push(`Trying name API...`)
+            // Use the linker API which is designed to find references in text
+            const linkerUrl = `https://www.sefaria.org/api/linker?text=${encodeURIComponent(cleanText.substring(0, 500))}`
+            debugLog.push(`Trying linker API...`)
 
-            const nameRes = await fetch(nameUrl, { signal: AbortSignal.timeout(10000) })
-            debugLog.push(`Name API status: ${nameRes.status}`)
+            const linkerRes = await fetch(linkerUrl, { signal: AbortSignal.timeout(15000) })
+            debugLog.push(`Linker status: ${linkerRes.status}`)
 
-            if (nameRes.ok) {
-                const nameData = await nameRes.json() as any
+            if (linkerRes.ok) {
+                const linkerData = await linkerRes.json() as any
+                debugLog.push(`Linker response keys: ${Object.keys(linkerData).join(', ')}`)
 
-                // Check for completions
-                if (nameData.completions?.length > 0) {
-                    debugLog.push(`Found ${nameData.completions.length} name completions`)
-                    for (const comp of nameData.completions.slice(0, 3)) {
-                        candidates.push({
-                            sourceName: comp,
-                            sefariaRef: comp,
-                            previewText: searchQuery,
-                            source: 'Sefaria Name'
-                        })
+                // Linker returns refs in various formats
+                const refs = linkerData.refs || linkerData.matches || []
+                if (refs.length > 0) {
+                    debugLog.push(`Found ${refs.length} refs from linker`)
+                    for (const ref of refs.slice(0, 5)) {
+                        const refStr = typeof ref === 'string' ? ref : ref.ref || ref.url || ''
+                        if (refStr) {
+                            candidates.push({
+                                sourceName: refStr,
+                                sefariaRef: refStr,
+                                previewText: searchQuery,
+                                source: 'Sefaria Linker'
+                            })
+                        }
                     }
                 }
             }
         } catch (e) {
-            debugLog.push(`Name API error: ${e}`)
+            debugLog.push(`Linker error: ${e}`)
         }
 
-        // Strategy 2: Try find-refs API if name didn't work
+        // Strategy 2: Try find-refs API if linker didn't work
         if (candidates.length === 0) {
             try {
-                const findUrl = `https://www.sefaria.org/api/find-refs?text=${encodeURIComponent(searchQuery)}`
+                const findUrl = `https://www.sefaria.org/api/find-refs?text=${encodeURIComponent(cleanText.substring(0, 300))}`
                 debugLog.push(`Trying find-refs API...`)
 
                 const findRes = await fetch(findUrl, { signal: AbortSignal.timeout(10000) })
@@ -181,16 +187,21 @@ export async function POST(request: NextRequest) {
 
                 if (findRes.ok) {
                     const findData = await findRes.json() as any
+                    debugLog.push(`Find-refs keys: ${Object.keys(findData).join(', ')}`)
 
-                    if (findData.refs?.length > 0) {
-                        debugLog.push(`Found ${findData.refs.length} refs`)
-                        for (const ref of findData.refs.slice(0, 5)) {
-                            candidates.push({
-                                sourceName: ref,
-                                sefariaRef: ref,
-                                previewText: searchQuery,
-                                source: 'Sefaria Refs'
-                            })
+                    const refs = findData.refs || findData.ref_data || []
+                    if (refs.length > 0) {
+                        debugLog.push(`Found ${refs.length} refs`)
+                        for (const ref of refs.slice(0, 5)) {
+                            const refStr = typeof ref === 'string' ? ref : ref.ref || ''
+                            if (refStr) {
+                                candidates.push({
+                                    sourceName: refStr,
+                                    sefariaRef: refStr,
+                                    previewText: searchQuery,
+                                    source: 'Sefaria Refs'
+                                })
+                            }
                         }
                     }
                 }
