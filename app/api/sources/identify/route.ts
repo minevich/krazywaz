@@ -167,49 +167,87 @@ Examples: "Berakhot 55a", "Rashi on Genesis 1:1"`
             .trim()
 
         // Step 2: Call Sefaria find-refs API (POST with JSON)
+        // Step 2: Try Sefaria APIs
+
+        // Strategy A: Try find-refs with correct body format
         try {
-            debugLog.push('Calling Sefaria find-refs...')
+            debugLog.push('Trying Sefaria find-refs...')
 
             const sefariaRes = await fetch('https://www.sefaria.org/api/find-refs', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    text: cleanText.substring(0, 1000),
-                    lang: 'he',
-                    with_text: true
+                    text: {
+                        body: cleanText.substring(0, 1000),
+                        title: ''
+                    },
+                    lang: 'he'
                 }),
-                signal: AbortSignal.timeout(20000)
+                signal: AbortSignal.timeout(15000)
             })
 
-            debugLog.push(`Sefaria: ${sefariaRes.status}`)
+            debugLog.push(`find-refs: ${sefariaRes.status}`)
 
             if (sefariaRes.ok) {
-                const sefariaData = await sefariaRes.json() as any
-                debugLog.push(`Keys: ${Object.keys(sefariaData).join(', ')}`)
+                const data = await sefariaRes.json() as any
+                debugLog.push(`Keys: ${Object.keys(data).join(', ')}`)
 
-                // find-refs returns { ref_data: [{ref: "...", ...}] }
-                const refData = sefariaData.ref_data || sefariaData.refs || []
-
-                if (Array.isArray(refData) && refData.length > 0) {
-                    debugLog.push(`Found ${refData.length} Sefaria refs`)
-                    for (const item of refData.slice(0, 5)) {
-                        const ref = typeof item === 'string' ? item : (item.ref || item.url || '')
-                        if (ref) {
-                            candidates.push({
-                                sourceName: ref.replace(/_/g, ' '),
-                                sefariaRef: ref.replace(/ /g, '_'),
-                                previewText: item.text?.he?.substring(0, 100) || cleanText.substring(0, 100),
-                                source: 'Sefaria'
-                            })
+                // Handle async response - might return task_id
+                if (data.task_id) {
+                    debugLog.push('Async task, skipping...')
+                } else {
+                    const refs = data.ref_data || data.refs || data.results || []
+                    if (Array.isArray(refs) && refs.length > 0) {
+                        for (const item of refs.slice(0, 5)) {
+                            const ref = typeof item === 'string' ? item : (item.ref || '')
+                            if (ref) {
+                                candidates.push({
+                                    sourceName: ref.replace(/_/g, ' '),
+                                    sefariaRef: ref,
+                                    previewText: cleanText.substring(0, 80),
+                                    source: 'Sefaria'
+                                })
+                            }
                         }
                     }
                 }
-            } else {
-                const errText = await sefariaRes.text()
-                debugLog.push(`Sefaria error: ${errText.substring(0, 100)}`)
             }
         } catch (e) {
-            debugLog.push(`Sefaria error: ${e}`)
+            debugLog.push(`find-refs error: ${e}`)
+        }
+
+        // Strategy B: Try name API to match text patterns
+        if (candidates.length === 0) {
+            try {
+                // Extract first few significant Hebrew words for lookup
+                const words = cleanText.split(' ').filter((w: string) => w.length > 2).slice(0, 3)
+                const searchTerm = words.join(' ')
+
+                debugLog.push(`Trying name API: ${searchTerm.substring(0, 30)}...`)
+
+                const nameRes = await fetch(
+                    `https://www.sefaria.org/api/name/${encodeURIComponent(searchTerm)}?limit=5`,
+                    { signal: AbortSignal.timeout(10000) }
+                )
+
+                debugLog.push(`name API: ${nameRes.status}`)
+
+                if (nameRes.ok) {
+                    const nameData = await nameRes.json() as any
+
+                    // Check if it's a valid ref
+                    if (nameData.is_ref && nameData.ref) {
+                        candidates.push({
+                            sourceName: nameData.ref,
+                            sefariaRef: nameData.ref,
+                            previewText: cleanText.substring(0, 80),
+                            source: 'Sefaria Match'
+                        })
+                    }
+                }
+            } catch (e) {
+                debugLog.push(`name API error: ${e}`)
+            }
         }
 
         // Return results
