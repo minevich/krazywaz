@@ -183,11 +183,19 @@ export async function POST(request: NextRequest) {
 
         // Return results
         if (candidates.length === 0) {
-            candidates.push({
-                sourceName: 'No match found',
-                sefariaRef: '',
-                previewText: cleanText.substring(0, 150),
-                source: 'OCR Only'
+            // Return failure with debug so user sees what happened
+            return NextResponse.json({
+                success: false,
+                error: 'No match found',
+                candidates: [{
+                    sourceName: 'No match found',
+                    sefariaRef: '',
+                    previewText: cleanText.substring(0, 150),
+                    source: 'OCR Only'
+                }],
+                ocrText: cleanText.substring(0, 100),
+                searchQuery,
+                debug: debugLog
             })
         }
 
