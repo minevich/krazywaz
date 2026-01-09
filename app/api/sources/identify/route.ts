@@ -34,13 +34,14 @@ export async function POST(request: NextRequest) {
         const candidates: Array<{ sourceName: string, sefariaRef: string, previewText: string, source?: string }> = []
 
         // ============================================
-        // Try multiple Gemini models until one works
+        // Try multiple Gemini models with correct names
         // ============================================
 
         const models = [
-            'gemini-1.5-flash',      // Higher free tier limits
-            'gemini-2.0-flash-exp',  // Experimental  
-            'gemini-1.5-pro'         // Pro model
+            'gemini-2.0-flash-exp',       // Experimental - this one worked before!
+            'gemini-1.5-flash-latest',    // Latest stable flash
+            'gemini-1.5-flash-002',       // Specific stable version
+            'gemini-1.5-pro-latest',      // Pro latest
         ]
 
         if (GEMINI_API_KEY) {
@@ -75,9 +76,9 @@ Examples: "Berakhot 55a", "Rashi on Genesis 1:1", "Shulchan Arukh, Orach Chayim 
 
                     debugLog.push(`${model}: ${geminiResponse.status}`)
 
-                    if (geminiResponse.status === 429) {
-                        debugLog.push(`${model} rate limited, trying next...`)
-                        continue // Try next model
+                    // If rate limited or not found, try next model
+                    if (geminiResponse.status === 429 || geminiResponse.status === 404) {
+                        continue
                     }
 
                     if (geminiResponse.ok) {
