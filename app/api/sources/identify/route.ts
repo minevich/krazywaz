@@ -87,9 +87,8 @@ export async function POST(request: NextRequest) {
         // ============================================
 
         try {
-            // Use quotes for exact phrase matching
-            const exactQuery = `"${exactPhrase}"`
-            const sefariaUrl = `https://www.sefaria.org/api/search-wrapper?q=${encodeURIComponent(exactQuery)}&type=text&size=5`
+            // Search with the shorter phrase first (more distinctive)
+            const sefariaUrl = `https://www.sefaria.org/api/search-wrapper?q=${encodeURIComponent(exactPhrase)}&type=text&size=8`
             console.log('Searching Sefaria (exact)...')
             const sefariaRes = await fetch(sefariaUrl, { signal: AbortSignal.timeout(8000) })
 
