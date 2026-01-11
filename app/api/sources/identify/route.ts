@@ -205,10 +205,22 @@ Examples: "Berakhot 55a", "Rashi on Genesis 1:1"`
                             const statusData = await statusRes.json() as any
                             if (statusData.state === 'SUCCESS' && statusData.result) {
                                 debugLog.push('Async task SUCCESS!')
-                                const results = statusData.result.ref_data || statusData.result.refs || []
+                                // Debug: log the actual structure
+                                debugLog.push(`Result keys: ${Object.keys(statusData.result).join(', ')}`)
+                                debugLog.push(`Result preview: ${JSON.stringify(statusData.result).substring(0, 200)}`)
+
+                                // Try multiple possible structures
+                                const results = statusData.result.ref_data ||
+                                    statusData.result.refs ||
+                                    statusData.result.matches ||
+                                    (Array.isArray(statusData.result) ? statusData.result : [])
+
+                                debugLog.push(`Found ${results.length} results`)
+
                                 if (results.length > 0) {
                                     for (const item of results.slice(0, 5)) {
-                                        const ref = typeof item === 'string' ? item : (item.ref || '')
+                                        const ref = typeof item === 'string' ? item : (item.ref || item.Ref || item.reference || '')
+                                        debugLog.push(`Item: ${JSON.stringify(item).substring(0, 100)}`)
                                         if (ref) {
                                             candidates.push({
                                                 sourceName: ref.replace(/_/g, ' '),
