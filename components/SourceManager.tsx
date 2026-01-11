@@ -1321,13 +1321,24 @@ export default function SourceManager() {
                                 >
                                     <div className="flex items-center justify-between mb-1">
                                         <div className="font-bold text-slate-800">{result.sourceName}</div>
-                                        <span className="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border">{result.sefariaRef}</span>
+                                        <div className="flex items-center gap-2">
+                                            <a
+                                                href={`https://www.sefaria.org/${result.sefariaRef.replace(/ /g, '_')}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded border border-emerald-200 hover:bg-emerald-200 transition-colors"
+                                            >
+                                                View on Sefaria ↗
+                                            </a>
+                                            <span className="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border">{result.sefariaRef}</span>
+                                        </div>
                                     </div>
                                     <p className="text-sm text-slate-600 line-clamp-2 font-serif bg-slate-50 p-2 rounded" dir="rtl">
                                         {result.previewText}
                                     </p>
                                     <div className="mt-2 text-xs text-blue-600 font-medium opacity-0 group-hover:opacity-100 transition-opacity">
-                                        Click to apply
+                                        Click to apply this source
                                     </div>
                                 </div>
                             ))}
