@@ -26,7 +26,7 @@ async function verifyCandidate(ref: string, inputHeText: string): Promise<number
     try {
         const res = await fetch(`https://www.sefaria.org/api/texts/${ref}?context=0&pad=0`)
         if (!res.ok) return 0
-        const data = await res.json()
+        const data = await res.json() as any
 
         // Flatten text
         const flatten = (t: any): string => {
