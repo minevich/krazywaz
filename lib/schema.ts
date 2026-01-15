@@ -29,6 +29,7 @@ export const shiurim = sqliteTable('shiurim', {
     duration: text('duration'),
     link: text('link'),
     thumbnail: text('thumbnail'), // URL to thumbnail image for social sharing
+    status: text('status').$type<'draft' | 'published' | 'scheduled'>().default('published'), // Draft mode support
     createdAt: integer('created_at', { mode: 'timestamp' })
         .notNull()
         .$defaultFn(() => new Date()),

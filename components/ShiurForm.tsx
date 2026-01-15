@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import BulkLinkImporter from './BulkLinkImporter'
 
 interface Shiur {
   id?: string
@@ -49,6 +50,7 @@ export default function ShiurForm({ shiur, onSuccess, onCancel }: ShiurFormProps
     duration: shiur?.duration || '',
     link: shiur?.link || '',
     thumbnail: (shiur as any)?.thumbnail || '',
+    status: (shiur as any)?.status || 'published',
     youtube: shiur?.platformLinks?.youtube || '',
     youtubeMusic: shiur?.platformLinks?.youtubeMusic || '',
     spotify: shiur?.platformLinks?.spotify || '',
@@ -61,6 +63,21 @@ export default function ShiurForm({ shiur, onSuccess, onCancel }: ShiurFormProps
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [showBulkImporter, setShowBulkImporter] = useState(false)
+
+  const handleBulkImport = (links: Record<string, string>) => {
+    setFormData(prev => ({
+      ...prev,
+      youtube: links.youtube || prev.youtube,
+      youtubeMusic: links.youtubeMusic || prev.youtubeMusic,
+      spotify: links.spotify || prev.spotify,
+      apple: links.apple || prev.apple,
+      amazon: links.amazon || prev.amazon,
+      pocket: links.pocket || prev.pocket,
+      twentyFourSix: links.twentyFourSix || prev.twentyFourSix,
+      castbox: links.castbox || prev.castbox,
+    }))
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -81,6 +98,7 @@ export default function ShiurForm({ shiur, onSuccess, onCancel }: ShiurFormProps
         duration: formData.duration || undefined,
         link: formData.link || undefined,
         thumbnail: formData.thumbnail || undefined,
+        status: formData.status,
         platformLinks: {
           youtube: formData.youtube || undefined,
           youtubeMusic: formData.youtubeMusic || undefined,
@@ -150,6 +168,48 @@ export default function ShiurForm({ shiur, onSuccess, onCancel }: ShiurFormProps
       )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Status Toggle */}
+        <div className="flex items-center gap-4 pb-4 border-b">
+          <span className="text-sm font-medium text-gray-700">Status:</span>
+          <div className="flex rounded-lg overflow-hidden border border-gray-300">
+            <button
+              type="button"
+              onClick={() => setFormData({ ...formData, status: 'draft' })}
+              className={`px-4 py-2 text-sm font-medium transition-colors ${formData.status === 'draft'
+                  ? 'bg-yellow-500 text-white'
+                  : 'bg-white text-gray-700 hover:bg-gray-50'
+                }`}
+            >
+              📝 Draft
+            </button>
+            <button
+              type="button"
+              onClick={() => setFormData({ ...formData, status: 'published' })}
+              className={`px-4 py-2 text-sm font-medium border-x border-gray-300 transition-colors ${formData.status === 'published'
+                  ? 'bg-green-500 text-white'
+                  : 'bg-white text-gray-700 hover:bg-gray-50'
+                }`}
+            >
+              ✅ Published
+            </button>
+            <button
+              type="button"
+              onClick={() => setFormData({ ...formData, status: 'scheduled' })}
+              className={`px-4 py-2 text-sm font-medium transition-colors ${formData.status === 'scheduled'
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-white text-gray-700 hover:bg-gray-50'
+                }`}
+            >
+              🕐 Scheduled
+            </button>
+          </div>
+          {formData.status === 'draft' && (
+            <span className="text-xs text-yellow-600 bg-yellow-50 px-2 py-1 rounded">
+              Won't show on public site
+            </span>
+          )}
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -368,7 +428,16 @@ export default function ShiurForm({ shiur, onSuccess, onCancel }: ShiurFormProps
         </div>
 
         <div className="border-t pt-6">
-          <h3 className="text-lg font-semibold mb-4">Platform Links</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold">Platform Links</h3>
+            <button
+              type="button"
+              onClick={() => setShowBulkImporter(true)}
+              className="px-3 py-1.5 text-sm bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors font-medium"
+            >
+              📋 Bulk Import
+            </button>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -485,6 +554,13 @@ export default function ShiurForm({ shiur, onSuccess, onCancel }: ShiurFormProps
           </button>
         </div>
       </form>
+
+      {/* Bulk Link Importer Modal */}
+      <BulkLinkImporter
+        isOpen={showBulkImporter}
+        onClose={() => setShowBulkImporter(false)}
+        onApply={handleBulkImport}
+      />
     </div>
   )
 }

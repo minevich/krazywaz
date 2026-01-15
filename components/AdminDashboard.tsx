@@ -3,8 +3,9 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Plus, Edit, Trash2, RefreshCw, LogOut, FileText } from 'lucide-react'
+import { Plus, Edit, Trash2, RefreshCw, LogOut, FileText, Search, Filter, X } from 'lucide-react'
 import ShiurForm from './ShiurForm'
+import { useToast } from './Toast'
 
 interface Shiur {
   id: string
@@ -37,6 +38,51 @@ export default function AdminDashboard() {
   const [editingShiur, setEditingShiur] = useState<Shiur | null>(null)
   const [showForm, setShowForm] = useState(false)
   const router = useRouter()
+  const toast = useToast()
+
+  // Search & Filter state
+  const [searchQuery, setSearchQuery] = useState('')
+  const [dateFilter, setDateFilter] = useState<'all' | 'week' | 'month' | 'year'>('all')
+  const [sourceFilter, setSourceFilter] = useState<'all' | 'has-sources' | 'no-sources'>('all')
+
+  // Filter shiurim based on search and filters
+  const filteredShiurim = shiurim.filter(shiur => {
+    // Text search
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase()
+      const matchesTitle = shiur.title.toLowerCase().includes(query)
+      const matchesDesc = shiur.description?.toLowerCase().includes(query)
+      const matchesBlurb = shiur.blurb?.toLowerCase().includes(query)
+      if (!matchesTitle && !matchesDesc && !matchesBlurb) return false
+    }
+
+    // Date filter
+    if (dateFilter !== 'all') {
+      const pubDate = new Date(shiur.pubDate)
+      const now = new Date()
+      const daysDiff = (now.getTime() - pubDate.getTime()) / (1000 * 60 * 60 * 24)
+      if (dateFilter === 'week' && daysDiff > 7) return false
+      if (dateFilter === 'month' && daysDiff > 30) return false
+      if (dateFilter === 'year' && daysDiff > 365) return false
+    }
+
+    // Source filter
+    if (sourceFilter !== 'all') {
+      const hasSources = !!(shiur.sourcesJson || shiur.sourceDoc)
+      if (sourceFilter === 'has-sources' && !hasSources) return false
+      if (sourceFilter === 'no-sources' && hasSources) return false
+    }
+
+    return true
+  })
+
+  const clearFilters = () => {
+    setSearchQuery('')
+    setDateFilter('all')
+    setSourceFilter('all')
+  }
+
+  const hasActiveFilters = searchQuery || dateFilter !== 'all' || sourceFilter !== 'all'
 
   useEffect(() => {
     fetchShiurim()
@@ -66,13 +112,13 @@ export default function AdminDashboard() {
       const data = await response.json() as { synced?: number; errors?: number; error?: string }
 
       if (response.ok) {
-        alert(`Synced ${data.synced} shiurim. ${data.errors} errors.`)
+        toast.success(`Synced ${data.synced} shiurim`, data.errors ? `${data.errors} errors` : undefined)
         fetchShiurim()
       } else {
-        alert('Error syncing RSS feed: ' + data.error)
+        toast.error('Error syncing RSS feed', data.error)
       }
     } catch (error) {
-      alert('Error syncing RSS feed')
+      toast.error('Error syncing RSS feed')
     } finally {
       setSyncing(false)
     }
@@ -87,12 +133,13 @@ export default function AdminDashboard() {
       })
 
       if (response.ok) {
+        toast.success('Shiur deleted')
         fetchShiurim()
       } else {
-        alert('Error deleting shiur')
+        toast.error('Error deleting shiur')
       }
     } catch (error) {
-      alert('Error deleting shiur')
+      toast.error('Error deleting shiur')
     }
   }
 
@@ -119,13 +166,13 @@ export default function AdminDashboard() {
       })
 
       if (response.ok) {
-        alert(type === 'clipped' ? 'Clipped sources deleted' : 'PDF link removed')
+        toast.success(type === 'clipped' ? 'Clipped sources deleted' : 'PDF link removed')
         fetchShiurim()
       } else {
-        alert('Error deleting')
+        toast.error('Error deleting')
       }
     } catch (error) {
-      alert('Error deleting')
+      toast.error('Error deleting')
     }
   }
 
@@ -173,8 +220,64 @@ export default function AdminDashboard() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 py-8">
+        {/* Search and Filters */}
+        <div className="mb-6 bg-white rounded-lg shadow p-4">
+          <div className="flex flex-wrap items-center gap-4">
+            {/* Search Input */}
+            <div className="relative flex-1 min-w-[250px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search shiurim..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+              />
+            </div>
+
+            {/* Date Filter */}
+            <select
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value as any)}
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-white"
+            >
+              <option value="all">All Time</option>
+              <option value="week">This Week</option>
+              <option value="month">This Month</option>
+              <option value="year">This Year</option>
+            </select>
+
+            {/* Source Filter */}
+            <select
+              value={sourceFilter}
+              onChange={(e) => setSourceFilter(e.target.value as any)}
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-white"
+            >
+              <option value="all">All Sources</option>
+              <option value="has-sources">Has Sources</option>
+              <option value="no-sources">Missing Sources</option>
+            </select>
+
+            {/* Clear Filters */}
+            {hasActiveFilters && (
+              <button
+                onClick={clearFilters}
+                className="flex items-center gap-1 px-3 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="w-4 h-4" />
+                Clear
+              </button>
+            )}
+          </div>
+        </div>
+
         <div className="mb-6 flex items-center justify-between">
-          <h2 className="text-xl font-semibold">All Shiurim ({shiurim.length})</h2>
+          <h2 className="text-xl font-semibold">
+            {hasActiveFilters
+              ? `Showing ${filteredShiurim.length} of ${shiurim.length} Shiurim`
+              : `All Shiurim (${shiurim.length})`
+            }
+          </h2>
           <button
             onClick={() => {
               setEditingShiur(null)
@@ -227,11 +330,24 @@ export default function AdminDashboard() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {shiurim.map((shiur) => (
-                  <tr key={shiur.id} className="hover:bg-gray-50">
+                {filteredShiurim.map((shiur) => (
+                  <tr key={shiur.id} className="hover:bg-gray-50 group">
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900 max-w-md truncate">
-                        {shiur.title}
+                      <div className="flex items-center gap-2">
+                        <div className="text-sm font-medium text-gray-900 max-w-md truncate">
+                          {shiur.title}
+                        </div>
+                        {/* Hover Edit Button */}
+                        <button
+                          onClick={() => {
+                            setEditingShiur(shiur)
+                            setShowForm(true)
+                          }}
+                          className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-primary hover:bg-primary/10 rounded transition-all"
+                          title="Quick Edit"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">

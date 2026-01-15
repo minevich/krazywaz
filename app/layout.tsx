@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Inter, Cormorant_Garamond } from 'next/font/google'
 import './globals.css'
+import { ToastProvider } from '@/components/Toast'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -28,7 +29,11 @@ export default function RootLayout({
       <head>
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
       </head>
-      <body className={`${inter.variable} ${cormorantGaramond.variable} font-sans antialiased`}>{children}</body>
+      <body className={`${inter.variable} ${cormorantGaramond.variable} font-sans antialiased`}>
+        <ToastProvider>
+          {children}
+        </ToastProvider>
+      </body>
     </html>
   )
 }
