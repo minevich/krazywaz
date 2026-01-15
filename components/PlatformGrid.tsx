@@ -80,23 +80,23 @@ const platforms = [
 
 export default function PlatformGrid() {
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-4 max-w-5xl mx-auto my-6 md:my-12 px-2 md:px-4">
+    <div className="flex flex-wrap justify-center gap-2 md:gap-3 max-w-6xl mx-auto my-4 md:my-8 px-2 md:px-4">
       {platforms.map((platform) => (
         <Link
           key={platform.name}
           href={platform.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex flex-col items-center justify-center p-3 md:p-6 bg-white rounded-xl shadow-sm hover:shadow-lg hover:-translate-y-2 hover:scale-105 active:scale-95 transition-all duration-200 border border-gray-100 group text-center h-full cursor-pointer"
+          className="flex items-center gap-2 px-3 py-2 md:px-4 md:py-2.5 bg-white rounded-lg shadow-sm hover:shadow-md hover:-translate-y-1 active:scale-95 transition-all duration-200 border border-gray-100 group cursor-pointer"
         >
-          <div className="mb-2 md:mb-4 h-8 w-8 md:h-12 md:w-12 relative flex items-center justify-center group-hover:scale-110 transition-transform duration-200">
+          <div className="h-5 w-5 md:h-6 md:w-6 relative flex items-center justify-center flex-shrink-0">
             {platform.customSvg ? (
-              platform.customSvg
+              <div className="w-5 h-5 md:w-6 md:h-6">{platform.customSvg}</div>
             ) : (
-              <i className={`${platform.icon} text-2xl md:text-4xl text-[#4a90e2] group-hover:text-primary transition-colors`}></i>
+              <i className={`${platform.icon} text-lg md:text-xl text-[#4a90e2] group-hover:text-primary transition-colors`}></i>
             )}
           </div>
-          <span className="font-medium text-sm md:text-base text-gray-700 group-hover:text-primary transition-colors">
+          <span className="font-medium text-xs md:text-sm text-gray-700 group-hover:text-primary transition-colors whitespace-nowrap">
             {platform.name}
           </span>
         </Link>
