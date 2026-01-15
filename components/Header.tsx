@@ -13,7 +13,7 @@ export default function Header() {
             className="w-full h-full object-cover"
           />
         </div>
-        <h1 className="text-xl md:text-4xl font-bold mb-1 md:mb-3 tracking-tight leading-tight" style={{ fontFamily: 'var(--font-lora), Georgia, serif' }}>
+        <h1 className="font-serif text-xl md:text-4xl font-bold mb-1 md:mb-3 tracking-tight leading-tight">
           <Link href="/">Rabbi Kraz's Shiurim</Link>
         </h1>
         <p className="hidden md:block text-base md:text-lg text-blue-100 max-w-2xl mx-auto font-light">
@@ -51,16 +51,16 @@ export default function Header() {
             Videos
           </Link>
           <Link
-            className="px-5 py-2 md:px-6 md:py-2.5 text-sm md:text-base bg-accent text-white rounded-full font-medium shadow-lg hover:shadow-xl hover:bg-accent/90 hover:-translate-y-0.5 transition-all"
-            href="/sponsor"
-          >
-            Sponsor
-          </Link>
-          <Link
             className="px-5 py-2 md:px-6 md:py-2.5 text-sm md:text-base rounded-full font-medium shadow-lg hover:shadow-xl transition-all bg-white/10 hover:bg-white/20 text-white border border-white/20 backdrop-blur-sm hover:-translate-y-0.5"
             href="/contact"
           >
             Contact
+          </Link>
+          <Link
+            className="px-5 py-2 md:px-6 md:py-2.5 text-sm md:text-base bg-accent text-white rounded-full font-medium shadow-lg hover:shadow-xl hover:bg-accent/90 hover:-translate-y-0.5 transition-all"
+            href="/sponsor"
+          >
+            Sponsor
           </Link>
         </div>
       </div>

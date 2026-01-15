@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { Inter, Lora } from 'next/font/google'
+import { Inter, Cormorant_Garamond } from 'next/font/google'
 import './globals.css'
 import { ToastProvider } from '@/components/Toast'
 
@@ -8,10 +8,10 @@ const inter = Inter({
   variable: '--font-inter',
 })
 
-const lora = Lora({
+const cormorantGaramond = Cormorant_Garamond({
   weight: ['400', '500', '600', '700'],
   subsets: ['latin'],
-  variable: '--font-lora',
+  variable: '--font-cormorant',
 })
 
 export const metadata: Metadata = {
@@ -48,7 +48,7 @@ export default function RootLayout({
       <head>
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
       </head>
-      <body className={`${inter.variable} ${lora.variable} font-sans antialiased`}>
+      <body className={`${inter.variable} ${cormorantGaramond.variable} font-sans antialiased`}>
         <ToastProvider>
           {children}
         </ToastProvider>

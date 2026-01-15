@@ -63,7 +63,7 @@ export default function ContactPage() {
             <Header />
             <main className="flex-1 w-full max-w-3xl mx-auto px-4 py-12">
                 <div className="text-center mb-10">
-                    <h1 className="text-3xl md:text-4xl font-bold text-primary mb-3" style={{ fontFamily: 'var(--font-lora), Georgia, serif' }}>
+                    <h1 className="font-serif text-3xl md:text-4xl font-bold text-primary mb-3">
                         Contact Us
                     </h1>
                     <p className="text-muted-foreground max-w-xl mx-auto">
