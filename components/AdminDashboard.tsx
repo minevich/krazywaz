@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Plus, Edit, Trash2, RefreshCw, LogOut, FileText, Search, Filter, X } from 'lucide-react'
@@ -379,115 +379,136 @@ export default function AdminDashboard() {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {filteredShiurim.map((shiur) => (
-                  <tr key={shiur.id} className="hover:bg-gray-50 group">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        <div className="text-sm font-medium text-gray-900 max-w-md truncate">
-                          {shiur.title}
+                  <React.Fragment key={shiur.id}>
+                    <tr className="hover:bg-gray-50 group">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center gap-2">
+                          <div className="text-sm font-medium text-gray-900 max-w-md truncate">
+                            {shiur.title}
+                          </div>
+                          {/* Hover Edit Button */}
+                          <button
+                            onClick={() => {
+                              setEditingShiur(shiur)
+                              setShowForm(true)
+                            }}
+                            className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-primary hover:bg-primary/10 rounded transition-all"
+                            title="Quick Edit"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
                         </div>
-                        {/* Hover Edit Button */}
-                        <button
-                          onClick={() => {
-                            setEditingShiur(shiur)
-                            setShowForm(true)
-                          }}
-                          className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-primary hover:bg-primary/10 rounded transition-all"
-                          title="Quick Edit"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {new Date(shiur.pubDate).toLocaleDateString()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {shiur.duration || 'N/A'}
-                    </td>
-                    {/* Source Sheet Status */}
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
-                      <div className="flex items-center justify-center gap-1.5 flex-wrap">
-                        {/* Clipped Sources */}
-                        {shiur.sourcesJson && (
-                          <div className="flex items-center gap-1">
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                              📜 Clipped
-                            </span>
-                            <button
-                              onClick={() => {
-                                if (confirm('Delete the clipped sources?')) {
-                                  handleDeleteSourceSheet(shiur.id, 'clipped')
-                                }
-                              }}
-                              className="text-red-400 hover:text-red-600 p-0.5"
-                              title="Delete clipped sources"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </button>
-                          </div>
-                        )}
-                        {/* PDF URL */}
-                        {shiur.sourceDoc && !shiur.sourceDoc.startsWith('sources:') && (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                            📄 PDF
-                          </span>
-                        )}
-                        {/* None */}
-                        {!shiur.sourcesJson && !shiur.sourceDoc && (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
-                            None
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    {/* Platform Links Progress */}
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
-                      {(() => {
-                        const count = getPlatformLinkCount(shiur)
-                        const percentage = Math.round((count / 8) * 100)
-                        const color = count >= 6 ? 'bg-green-500' : count >= 3 ? 'bg-yellow-500' : 'bg-red-400'
-                        return (
-                          <div className="flex items-center justify-center gap-2">
-                            <div className="w-16 h-2 bg-gray-200 rounded-full overflow-hidden">
-                              <div
-                                className={`h-full ${color} transition-all`}
-                                style={{ width: `${percentage}%` }}
-                              />
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {new Date(shiur.pubDate).toLocaleDateString()}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {shiur.duration || 'N/A'}
+                      </td>
+                      {/* Source Sheet Status */}
+                      <td className="px-6 py-4 whitespace-nowrap text-center">
+                        <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                          {/* Clipped Sources */}
+                          {shiur.sourcesJson && (
+                            <div className="flex items-center gap-1">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                📜 Clipped
+                              </span>
+                              <button
+                                onClick={() => {
+                                  if (confirm('Delete the clipped sources?')) {
+                                    handleDeleteSourceSheet(shiur.id, 'clipped')
+                                  }
+                                }}
+                                className="text-red-400 hover:text-red-600 p-0.5"
+                                title="Delete clipped sources"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
                             </div>
-                            <span className="text-xs text-gray-500 font-medium w-8">
-                              {count}/8
+                          )}
+                          {/* PDF URL */}
+                          {shiur.sourceDoc && !shiur.sourceDoc.startsWith('sources:') && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                              📄 PDF
                             </span>
-                          </div>
-                        )
-                      })()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <div className="flex items-center justify-end gap-2">
-                        <Link
-                          href={`/admin/sources?shiurId=${shiur.id}`}
-                          className="text-blue-600 hover:text-blue-800"
-                          title="Edit Sources"
-                        >
-                          <FileText className="w-4 h-4" />
-                        </Link>
-                        <button
-                          onClick={() => {
-                            setEditingShiur(shiur)
-                            setShowForm(true)
-                          }}
-                          className="text-primary hover:text-primary/80"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(shiur.id)}
-                          className="text-red-600 hover:text-red-800"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+                          )}
+                          {/* None */}
+                          {!shiur.sourcesJson && !shiur.sourceDoc && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
+                              None
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      {/* Platform Links Progress */}
+                      <td className="px-6 py-4 whitespace-nowrap text-center">
+                        {(() => {
+                          const count = getPlatformLinkCount(shiur)
+                          const percentage = Math.round((count / 8) * 100)
+                          const color = count >= 6 ? 'bg-green-500' : count >= 3 ? 'bg-yellow-500' : 'bg-red-400'
+                          return (
+                            <div className="flex items-center justify-center gap-2">
+                              <div className="w-16 h-2 bg-gray-200 rounded-full overflow-hidden">
+                                <div
+                                  className={`h-full ${color} transition-all`}
+                                  style={{ width: `${percentage}%` }}
+                                />
+                              </div>
+                              <span className="text-xs text-gray-500 font-medium w-8">
+                                {count}/8
+                              </span>
+                            </div>
+                          )
+                        })()}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <div className="flex items-center justify-end gap-2">
+                          <Link
+                            href={`/admin/sources?shiurId=${shiur.id}`}
+                            className="text-blue-600 hover:text-blue-800"
+                            title="Edit Sources"
+                          >
+                            <FileText className="w-4 h-4" />
+                          </Link>
+                          <button
+                            onClick={() => {
+                              setEditingShiur(shiur)
+                              setShowForm(true)
+                            }}
+                            className="text-primary hover:text-primary/80"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(shiur.id)}
+                            className="text-red-600 hover:text-red-800"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                    {/* Inline Edit Form - shows below the selected row */}
+                    {editingShiur?.id === shiur.id && showForm && (
+                      <tr>
+                        <td colSpan={7} className="px-4 py-4 bg-gray-50 border-t-2 border-primary">
+                          <ShiurForm
+                            shiur={editingShiur}
+                            onSuccess={() => {
+                              setShowForm(false)
+                              setEditingShiur(null)
+                              fetchShiurim()
+                            }}
+                            onCancel={() => {
+                              setShowForm(false)
+                              setEditingShiur(null)
+                            }}
+                          />
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>
