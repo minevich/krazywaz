@@ -3,8 +3,8 @@ import SearchBar from './SearchBar'
 
 export default function Header() {
   return (
-    <header className="relative text-white text-center py-6 md:py-16 px-4 overflow-hidden" style={{ background: 'linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--secondary)) 100%)' }}>
-      <div className="absolute inset-0 opacity-10 bg-[url('data:image/svg+xml;base64,...')] mix-blend-overlay"></div>
+    <header className="relative text-white text-center py-6 md:py-16 px-4" style={{ background: 'linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--secondary)) 100%)' }}>
+      <div className="absolute inset-0 opacity-10 bg-[url('data:image/svg+xml;base64,...')] mix-blend-overlay overflow-hidden"></div>
       <div className="relative z-10 max-w-4xl mx-auto">
         <div className="w-16 h-16 md:w-32 md:h-32 mx-auto mb-3 md:mb-6 shadow-lg rounded-full overflow-hidden border-2 md:border-4 border-white/20 backdrop-blur-sm transition-all">
           <img
@@ -21,7 +21,7 @@ export default function Header() {
         </p>
 
         {/* Search Bar */}
-        <div className="mt-4 md:mt-6 max-w-md mx-auto">
+        <div className="mt-4 md:mt-6 max-w-md mx-auto relative z-50">
           <SearchBar />
         </div>
 
