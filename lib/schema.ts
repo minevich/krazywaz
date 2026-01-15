@@ -70,3 +70,47 @@ export type NewShiur = typeof shiurim.$inferInsert
 
 export type PlatformLink = typeof platformLinks.$inferSelect
 export type NewPlatformLink = typeof platformLinks.$inferInsert
+
+// Analytics tables
+export const viewEvents = sqliteTable('view_events', {
+    id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+    shiurId: text('shiur_id').notNull().references(() => shiurim.id, { onDelete: 'cascade' }),
+    timestamp: integer('timestamp', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+    source: text('source').default('website'),
+    userAgent: text('user_agent'),
+    ipHash: text('ip_hash'),
+})
+
+export const analyticsCache = sqliteTable('analytics_cache', {
+    id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+    shiurId: text('shiur_id').notNull().unique().references(() => shiurim.id, { onDelete: 'cascade' }),
+    websiteViews: integer('website_views').default(0),
+    youtubeViews: integer('youtube_views').default(0),
+    spotifyPlays: integer('spotify_plays').default(0),
+    applePlays: integer('apple_plays').default(0),
+    amazonPlays: integer('amazon_plays').default(0),
+    otherPlays: integer('other_plays').default(0),
+    totalViews: integer('total_views').default(0),
+    lastYoutubeSync: integer('last_youtube_sync', { mode: 'timestamp' }),
+    lastManualSync: integer('last_manual_sync', { mode: 'timestamp' }),
+    lastUpdated: integer('last_updated', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+})
+
+export const platformSyncs = sqliteTable('platform_syncs', {
+    id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+    platform: text('platform').notNull(),
+    syncedAt: integer('synced_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+    recordsUpdated: integer('records_updated').default(0),
+    status: text('status').default('pending'),
+    errorMessage: text('error_message'),
+    metadata: text('metadata'),
+})
+
+export type ViewEvent = typeof viewEvents.$inferSelect
+export type NewViewEvent = typeof viewEvents.$inferInsert
+
+export type AnalyticsCache = typeof analyticsCache.$inferSelect
+export type NewAnalyticsCache = typeof analyticsCache.$inferInsert
+
+export type PlatformSync = typeof platformSyncs.$inferSelect
+export type NewPlatformSync = typeof platformSyncs.$inferInsert

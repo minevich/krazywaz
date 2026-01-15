@@ -7,7 +7,7 @@ const platforms = [
     icon: 'fab fa-youtube',
   },
   {
-    name: 'YouTube Music',
+    name: 'YT Music',
     url: 'https://music.youtube.com/playlist?list=PLFjvIKKaTDH85ZHMy4LsIxVydbTSL8kbt',
     icon: 'custom-ytmusic',
     customSvg: (
@@ -25,12 +25,12 @@ const platforms = [
     icon: 'fab fa-spotify',
   },
   {
-    name: 'Apple Podcasts',
+    name: 'Apple',
     url: 'https://podcasts.apple.com/us/podcast/rabbi-krazs-shiurim/id1701685139',
     icon: 'fab fa-apple',
   },
   {
-    name: 'Amazon Music',
+    name: 'Amazon',
     url: 'https://music.amazon.com/podcasts/f0e647ec-80d9-4224-961c-a7c1f9c52a1e/rabbi-krazs-shiurim',
     icon: 'fab fa-amazon',
   },

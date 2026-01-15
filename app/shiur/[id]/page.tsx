@@ -5,6 +5,7 @@ import { formatDate, formatDuration, extractYouTubeVideoId, getYouTubeThumbnail 
 import PlatformLinks from '@/components/PlatformLinks'
 import SourceSheetViewer from '@/components/SourceSheetViewer'
 import StickyAudioPlayer from '@/components/StickyAudioPlayer'
+import ViewCounter from '@/components/ViewCounter'
 import { getDb, getD1Database } from '@/lib/db'
 import { shiurim, platformLinks } from '@/lib/schema'
 import { eq } from 'drizzle-orm'
@@ -129,6 +130,8 @@ export default async function ShiurPage({ params }: { params: Promise<{ id: stri
                 <span>{formatDuration(shiur.duration)}</span>
               </>
             )}
+            <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
+            <ViewCounter shiurId={shiur.id} />
           </div>
         </div>
 
