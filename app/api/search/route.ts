@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDb, getD1Database } from '@/lib/db'
-import { sql } from 'drizzle-orm'
-
-export const runtime = 'edge'
 
 export async function GET(request: NextRequest) {
     try {
