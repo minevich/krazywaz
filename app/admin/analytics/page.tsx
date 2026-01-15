@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, RefreshCw, Download, Upload, TrendingUp, Eye, Youtube, Music, Apple, BarChart3 } from 'lucide-react'
+import { ArrowLeft, RefreshCw, Download, Upload, TrendingUp, Eye, Youtube, Music, Apple, BarChart3, X } from 'lucide-react'
 import { useToast } from '@/components/Toast'
 
 interface ShiurAnalytics {
@@ -36,6 +36,10 @@ export default function AdminAnalyticsPage() {
     const [loading, setLoading] = useState(true)
     const [syncing, setSyncing] = useState(false)
     const [sortBy, setSortBy] = useState<'total' | 'website' | 'youtube' | 'date'>('total')
+    const [showImport, setShowImport] = useState(false)
+    const [importPlatform, setImportPlatform] = useState<'spotify' | 'apple' | 'amazon'>('spotify')
+    const [importing, setImporting] = useState(false)
+    const fileInputRef = useRef<HTMLInputElement>(null)
     const toast = useToast()
 
     useEffect(() => {
@@ -70,6 +74,57 @@ export default function AdminAnalyticsPage() {
             toast.error('Failed to sync YouTube')
         } finally {
             setSyncing(false)
+        }
+    }
+
+    const handleCSVUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (!file) return
+
+        setImporting(true)
+        try {
+            const text = await file.text()
+            const lines = text.split('\n').map(line => line.trim()).filter(Boolean)
+
+            // Parse CSV - assuming format: Episode Name, Plays (or similar)
+            const data: { episodeName: string; plays: number }[] = []
+
+            for (let i = 1; i < lines.length; i++) { // Skip header
+                const parts = lines[i].split(',')
+                if (parts.length >= 2) {
+                    const episodeName = parts[0].replace(/"/g, '').trim()
+                    const plays = parseInt(parts[parts.length - 1].replace(/"/g, '').trim(), 10) || 0
+                    if (episodeName && plays > 0) {
+                        data.push({ episodeName, plays })
+                    }
+                }
+            }
+
+            if (data.length === 0) {
+                toast.error('No valid data found in CSV')
+                return
+            }
+
+            const response = await fetch('/api/admin/analytics/import-csv', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ platform: importPlatform, data }),
+            })
+
+            const result = await response.json() as { success: boolean, matched: number, unmatched: number, error?: string }
+
+            if (result.success) {
+                toast.success(`Imported ${result.matched} episodes`, `${result.unmatched} unmatched`)
+                fetchAnalytics()
+                setShowImport(false)
+            } else {
+                toast.error(result.error || 'Import failed')
+            }
+        } catch (error) {
+            toast.error('Failed to parse CSV')
+        } finally {
+            setImporting(false)
+            if (fileInputRef.current) fileInputRef.current.value = ''
         }
     }
 
@@ -113,6 +168,13 @@ export default function AdminAnalyticsPage() {
                     </div>
                     <div className="flex items-center gap-3">
                         <button
+                            onClick={() => setShowImport(true)}
+                            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                        >
+                            <Upload className="w-4 h-4" />
+                            Import CSV
+                        </button>
+                        <button
                             onClick={handleYouTubeSync}
                             disabled={syncing}
                             className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
@@ -123,6 +185,60 @@ export default function AdminAnalyticsPage() {
                     </div>
                 </div>
             </div>
+
+            {/* CSV Import Modal */}
+            {showImport && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-xl font-bold">Import Podcast Analytics</h2>
+                            <button onClick={() => setShowImport(false)} className="text-gray-400 hover:text-gray-600">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Platform</label>
+                                <select
+                                    value={importPlatform}
+                                    onChange={(e) => setImportPlatform(e.target.value as typeof importPlatform)}
+                                    className="w-full px-3 py-2 border rounded-lg"
+                                >
+                                    <option value="spotify">Spotify</option>
+                                    <option value="apple">Apple Podcasts</option>
+                                    <option value="amazon">Amazon Music</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">CSV File</label>
+                                <input
+                                    ref={fileInputRef}
+                                    type="file"
+                                    accept=".csv"
+                                    onChange={handleCSVUpload}
+                                    disabled={importing}
+                                    className="w-full px-3 py-2 border rounded-lg file:mr-4 file:py-1 file:px-4 file:rounded file:border-0 file:bg-primary file:text-white file:cursor-pointer"
+                                />
+                            </div>
+
+                            <div className="bg-gray-50 rounded-lg p-4 text-sm text-gray-600">
+                                <p className="font-medium mb-1">Expected CSV format:</p>
+                                <code className="text-xs">Episode Name, ..., Plays</code>
+                                <p className="mt-2 text-xs">Download from Spotify for Podcasters, Apple Podcast Connect, or Amazon for Podcasters.</p>
+                            </div>
+                        </div>
+
+                        {importing && (
+                            <div className="mt-4 flex items-center gap-2 text-primary">
+                                <RefreshCw className="w-4 h-4 animate-spin" />
+                                Importing...
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
 
             <div className="max-w-7xl mx-auto px-4 py-8">
                 {/* Summary Cards */}
@@ -193,8 +309,8 @@ export default function AdminAnalyticsPage() {
                                 key={key}
                                 onClick={() => setSortBy(key as typeof sortBy)}
                                 className={`px-3 py-1 text-sm rounded-full transition-colors ${sortBy === key
-                                        ? 'bg-primary text-white'
-                                        : 'bg-white text-gray-600 hover:bg-gray-100'
+                                    ? 'bg-primary text-white'
+                                    : 'bg-white text-gray-600 hover:bg-gray-100'
                                     }`}
                             >
                                 {label}
@@ -282,17 +398,28 @@ export default function AdminAnalyticsPage() {
                     </div>
                 </div>
 
-                {/* Help Text */}
-                <div className="mt-8 bg-blue-50 rounded-xl p-6 border border-blue-100">
-                    <h3 className="font-semibold text-blue-900 mb-2">📊 How Analytics Work</h3>
-                    <ul className="text-sm text-blue-800 space-y-1">
-                        <li>• <strong>Website views</strong> are tracked automatically when users visit shiur pages</li>
-                        <li>• <strong>YouTube views</strong> sync when you click "Sync YouTube" (uses YouTube Data API)</li>
-                        <li>• <strong>Spotify/Apple/Amazon</strong> require manual CSV import (coming soon)</li>
-                        <li>• Views are debounced (1 per IP per hour per shiur) to prevent spam</li>
-                    </ul>
+                {/* Info Cards */}
+                <div className="mt-8 grid md:grid-cols-2 gap-4">
+                    <div className="bg-blue-50 rounded-xl p-6 border border-blue-100">
+                        <h3 className="font-semibold text-blue-900 mb-2">📊 How Analytics Work</h3>
+                        <ul className="text-sm text-blue-800 space-y-1">
+                            <li>• <strong>Website</strong> — Tracked automatically on page visits</li>
+                            <li>• <strong>YouTube</strong> — Click "Sync YouTube" to update</li>
+                            <li>• <strong>Spotify/Apple/Amazon</strong> — Use "Import CSV"</li>
+                        </ul>
+                    </div>
+                    <div className="bg-green-50 rounded-xl p-6 border border-green-100">
+                        <h3 className="font-semibold text-green-900 mb-2">🔗 OP3 Proxy for Future Tracking</h3>
+                        <p className="text-sm text-green-800 mb-2">
+                            For automatic podcast tracking, submit this RSS to platforms:
+                        </p>
+                        <code className="text-xs bg-green-100 px-2 py-1 rounded break-all block">
+                            {typeof window !== 'undefined' ? window.location.origin : ''}/api/rss/op3-proxy
+                        </code>
+                    </div>
                 </div>
             </div>
         </div>
     )
 }
+
