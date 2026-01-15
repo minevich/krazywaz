@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { Plus, Edit, Trash2, RefreshCw, LogOut, FileText, Search, Filter, X } from 'lucide-react'
 import ShiurForm from './ShiurForm'
 import { useToast } from './Toast'
+import AdminStats from './AdminStats'
 
 interface Shiur {
   id: string
@@ -19,6 +20,7 @@ interface Shiur {
   pubDate: string
   duration?: string | null
   link?: string | null
+  status?: 'draft' | 'published' | 'scheduled' | null
   platformLinks?: {
     youtube?: string | null
     youtubeMusic?: string | null
@@ -83,6 +85,40 @@ export default function AdminDashboard() {
   }
 
   const hasActiveFilters = searchQuery || dateFilter !== 'all' || sourceFilter !== 'all'
+
+  // Compute stats for AdminStats component
+  const stats = {
+    totalShiurim: shiurim.length,
+    thisMonthCount: shiurim.filter(s => {
+      const pubDate = new Date(s.pubDate)
+      const now = new Date()
+      return pubDate.getMonth() === now.getMonth() && pubDate.getFullYear() === now.getFullYear()
+    }).length,
+    withSources: shiurim.filter(s => s.sourcesJson || s.sourceDoc).length,
+    missingLinks: shiurim.filter(s => {
+      const links = s.platformLinks
+      if (!links) return true
+      const filledCount = [links.youtube, links.spotify, links.apple, links.amazon].filter(Boolean).length
+      return filledCount < 2 // Consider "missing" if less than 2 main platforms
+    }).length,
+    drafts: shiurim.filter(s => s.status === 'draft').length
+  }
+
+  // Helper to count platform links for a shiur
+  const getPlatformLinkCount = (shiur: Shiur) => {
+    const links = shiur.platformLinks
+    if (!links) return 0
+    return [
+      links.youtube,
+      links.youtubeMusic,
+      links.spotify,
+      links.apple,
+      links.amazon,
+      links.pocket,
+      links.twentyFourSix,
+      links.castbox
+    ].filter(Boolean).length
+  }
 
   useEffect(() => {
     fetchShiurim()
@@ -220,6 +256,15 @@ export default function AdminDashboard() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 py-8">
+        {/* Dashboard Stats */}
+        <AdminStats
+          totalShiurim={stats.totalShiurim}
+          thisMonthCount={stats.thisMonthCount}
+          withSources={stats.withSources}
+          missingLinks={stats.missingLinks}
+          drafts={stats.drafts}
+        />
+
         {/* Search and Filters */}
         <div className="mb-6 bg-white rounded-lg shadow p-4">
           <div className="flex flex-wrap items-center gap-4">
@@ -324,6 +369,9 @@ export default function AdminDashboard() {
                   <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Source Sheet
                   </th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Links
+                  </th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Actions
                   </th>
@@ -391,6 +439,27 @@ export default function AdminDashboard() {
                           </span>
                         )}
                       </div>
+                    </td>
+                    {/* Platform Links Progress */}
+                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                      {(() => {
+                        const count = getPlatformLinkCount(shiur)
+                        const percentage = Math.round((count / 8) * 100)
+                        const color = count >= 6 ? 'bg-green-500' : count >= 3 ? 'bg-yellow-500' : 'bg-red-400'
+                        return (
+                          <div className="flex items-center justify-center gap-2">
+                            <div className="w-16 h-2 bg-gray-200 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full ${color} transition-all`}
+                                style={{ width: `${percentage}%` }}
+                              />
+                            </div>
+                            <span className="text-xs text-gray-500 font-medium w-8">
+                              {count}/8
+                            </span>
+                          </div>
+                        )
+                      })()}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex items-center justify-end gap-2">
