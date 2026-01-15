@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import SearchBar from './SearchBar'
 
 export default function Header() {
   return (
@@ -18,7 +19,13 @@ export default function Header() {
         <p className="hidden md:block text-lg md:text-xl text-blue-100 max-w-2xl mx-auto font-light">
           Timeless Torah wisdom, delivered with passion. Dive into weekly shiurim that illuminate the soul.
         </p>
-        <div className="mt-4 md:mt-8 flex flex-wrap justify-center gap-2 md:gap-4">
+
+        {/* Search Bar */}
+        <div className="mt-4 md:mt-6 max-w-md mx-auto">
+          <SearchBar />
+        </div>
+
+        <div className="mt-4 md:mt-6 flex flex-wrap justify-center gap-2 md:gap-4">
           <Link
             className="px-5 py-2 md:px-6 md:py-2.5 text-sm md:text-base rounded-full font-medium shadow-lg hover:shadow-xl transition-all bg-white text-primary hover:-translate-y-0.5"
             href="/"
