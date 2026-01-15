@@ -3,21 +3,21 @@ import SearchBar from './SearchBar'
 
 export default function Header() {
   return (
-    <header className="relative text-white text-center py-6 md:py-16 px-4" style={{ background: 'linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--secondary)) 100%)' }}>
+    <header className="relative text-white text-center py-4 md:py-10 px-4" style={{ background: 'linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--secondary)) 100%)' }}>
       <div className="absolute inset-0 opacity-10 bg-[url('data:image/svg+xml;base64,...')] mix-blend-overlay overflow-hidden"></div>
       <div className="relative z-10 max-w-4xl mx-auto">
-        <div className="w-16 h-16 md:w-32 md:h-32 mx-auto mb-3 md:mb-6 shadow-lg rounded-full overflow-hidden border-2 md:border-4 border-white/20 backdrop-blur-sm transition-all">
+        <div className="w-14 h-14 md:w-24 md:h-24 mx-auto mb-2 md:mb-4 shadow-lg rounded-full overflow-hidden border-2 md:border-4 border-white/20 backdrop-blur-sm transition-all">
           <img
             src="https://raw.githubusercontent.com/rabbikraz/rabbikraz/main/Kraz%20Icon.png"
             alt="Rabbi Kraz"
             className="w-full h-full object-cover"
           />
         </div>
-        <h1 className="font-serif text-2xl md:text-6xl font-bold mb-1 md:mb-4 tracking-tight leading-tight">
+        <h1 className="text-xl md:text-4xl font-bold mb-1 md:mb-3 tracking-tight leading-tight" style={{ fontFamily: 'var(--font-lora), Georgia, serif' }}>
           <Link href="/">Rabbi Kraz's Shiurim</Link>
         </h1>
-        <p className="hidden md:block text-lg md:text-xl text-blue-100 max-w-2xl mx-auto font-light">
-          Timeless Torah wisdom, delivered with passion. Dive into weekly shiurim that illuminate the soul.
+        <p className="hidden md:block text-base md:text-lg text-blue-100 max-w-2xl mx-auto font-light">
+          Timeless Torah wisdom, delivered with passion.
         </p>
 
         {/* Search Bar */}
@@ -55,6 +55,12 @@ export default function Header() {
             href="/sponsor"
           >
             Sponsor
+          </Link>
+          <Link
+            className="px-5 py-2 md:px-6 md:py-2.5 text-sm md:text-base rounded-full font-medium shadow-lg hover:shadow-xl transition-all bg-white/10 hover:bg-white/20 text-white border border-white/20 backdrop-blur-sm hover:-translate-y-0.5"
+            href="/contact"
+          >
+            Contact
           </Link>
         </div>
       </div>

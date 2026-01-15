@@ -6,25 +6,25 @@
   :root {
     --font-inter: var(--font-inter);
     --font-cormorant: var(--font-cormorant);
-    --primary: 210 50% 23%;
+    --primary: 215 60% 15%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 214 56% 40%;
+    --secondary: 210 50% 30%;
     --secondary-foreground: 0 0% 100%;
-    --accent: 210 50% 23%;
+    --accent: 215 60% 15%;
     --accent-foreground: 0 0% 100%;
     --muted-foreground: 215 16% 47%;
     --background: 210 20% 98%;
-    --foreground: 210 50% 23%;
+    --foreground: 215 60% 15%;
     --card: 0 0% 100%;
-    --card-foreground: 210 50% 23%;
+    --card-foreground: 215 60% 15%;
     --popover: 0 0% 100%;
-    --popover-foreground: 210 50% 23%;
+    --popover-foreground: 215 60% 15%;
     --muted: 210 40% 96.1%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
-    --ring: 210 50% 23%;
+    --ring: 215 60% 15%;
     --radius: 0.5rem;
   }
 
