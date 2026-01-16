@@ -179,7 +179,7 @@ export default async function ShiurPage({ params }: { params: Promise<{ id: stri
         })()}
       </main>
 
-      <Footer />
+      <Footer withStickyPlayer />
 
       {/* Sticky Audio Player - Fixed at Bottom */}
       <StickyAudioPlayer shiur={shiur} />

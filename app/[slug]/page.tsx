@@ -170,7 +170,7 @@ export default async function SlugPage({ params }: { params: Promise<{ slug: str
                 })()}
             </main>
 
-            <Footer />
+            <Footer withStickyPlayer />
 
             <StickyAudioPlayer shiur={shiur} />
         </div>

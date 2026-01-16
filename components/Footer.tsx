@@ -2,9 +2,13 @@
 
 import Link from 'next/link'
 
-export default function Footer() {
+interface FooterProps {
+    withStickyPlayer?: boolean
+}
+
+export default function Footer({ withStickyPlayer = false }: FooterProps) {
     return (
-        <footer className="bg-primary text-white py-8 mt-auto">
+        <footer className={`bg-primary text-white py-8 mt-auto ${withStickyPlayer ? 'pb-24 md:pb-8' : ''}`}>
             <div className="max-w-7xl mx-auto px-4 text-center">
                 <p className="opacity-80 mb-4">
                     © {new Date().getFullYear()} Rabbi Kraz's Shiurim. All rights reserved.
