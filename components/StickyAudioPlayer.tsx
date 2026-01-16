@@ -156,7 +156,7 @@ export default function StickyAudioPlayer({ shiur }: StickyAudioPlayerProps) {
         // Calculate button position based on footer visibility
         // When footer visible: position completely above footer; when not: fixed corner
         const buttonPosition = footerVisible
-            ? 'bottom-28 md:bottom-4' // Well above footer on mobile
+            ? 'bottom-14 md:bottom-4' // Above shorter footer on mobile
             : 'bottom-4' // Corner position
 
         return (
