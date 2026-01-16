@@ -86,14 +86,37 @@ export default function AdminAnalyticsPage() {
             const text = await file.text()
             const lines = text.split('\n').map(line => line.trim()).filter(Boolean)
 
-            // Parse CSV - assuming format: Episode Name, Plays (or similar)
+            // Parse CSV - Spotify format: Episode, Date, Type, Starts, Streams, Listeners, ...
+            // We need: Column 0 (Episode name) and Column 4 (Streams)
             const data: { episodeName: string; plays: number }[] = []
 
+            // Helper to parse CSV line properly (handles quoted fields)
+            const parseCSVLine = (line: string): string[] => {
+                const result: string[] = []
+                let current = ''
+                let inQuotes = false
+
+                for (let i = 0; i < line.length; i++) {
+                    const char = line[i]
+                    if (char === '"') {
+                        inQuotes = !inQuotes
+                    } else if (char === ',' && !inQuotes) {
+                        result.push(current.trim())
+                        current = ''
+                    } else {
+                        current += char
+                    }
+                }
+                result.push(current.trim())
+                return result
+            }
+
             for (let i = 1; i < lines.length; i++) { // Skip header
-                const parts = lines[i].split(',')
-                if (parts.length >= 2) {
+                const parts = parseCSVLine(lines[i])
+                if (parts.length >= 5) {
                     const episodeName = parts[0].replace(/"/g, '').trim()
-                    const plays = parseInt(parts[parts.length - 1].replace(/"/g, '').trim(), 10) || 0
+                    // Spotify: Streams is at index 4
+                    const plays = parseInt(parts[4].replace(/"/g, '').replace(/,/g, '').trim(), 10) || 0
                     if (episodeName && plays > 0) {
                         data.push({ episodeName, plays })
                     }
