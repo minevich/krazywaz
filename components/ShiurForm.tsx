@@ -176,8 +176,8 @@ export default function ShiurForm({ shiur, onSuccess, onCancel }: ShiurFormProps
               type="button"
               onClick={() => setFormData({ ...formData, status: 'draft' })}
               className={`px-4 py-2 text-sm font-medium transition-colors ${formData.status === 'draft'
-                  ? 'bg-yellow-500 text-white'
-                  : 'bg-white text-gray-700 hover:bg-gray-50'
+                ? 'bg-yellow-500 text-white'
+                : 'bg-white text-gray-700 hover:bg-gray-50'
                 }`}
             >
               📝 Draft
@@ -186,8 +186,8 @@ export default function ShiurForm({ shiur, onSuccess, onCancel }: ShiurFormProps
               type="button"
               onClick={() => setFormData({ ...formData, status: 'published' })}
               className={`px-4 py-2 text-sm font-medium border-x border-gray-300 transition-colors ${formData.status === 'published'
-                  ? 'bg-green-500 text-white'
-                  : 'bg-white text-gray-700 hover:bg-gray-50'
+                ? 'bg-green-500 text-white'
+                : 'bg-white text-gray-700 hover:bg-gray-50'
                 }`}
             >
               ✅ Published
@@ -196,8 +196,8 @@ export default function ShiurForm({ shiur, onSuccess, onCancel }: ShiurFormProps
               type="button"
               onClick={() => setFormData({ ...formData, status: 'scheduled' })}
               className={`px-4 py-2 text-sm font-medium transition-colors ${formData.status === 'scheduled'
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-white text-gray-700 hover:bg-gray-50'
+                ? 'bg-blue-500 text-white'
+                : 'bg-white text-gray-700 hover:bg-gray-50'
                 }`}
             >
               🕐 Scheduled
@@ -384,22 +384,6 @@ export default function ShiurForm({ shiur, onSuccess, onCancel }: ShiurFormProps
                 Use the "Source Clipper" tool to generate and attach sources here.
               </p>
             </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Thumbnail URL (for WhatsApp/Social sharing)
-            </label>
-            <input
-              type="url"
-              value={formData.thumbnail}
-              onChange={(e) => setFormData({ ...formData, thumbnail: e.target.value })}
-              placeholder="https://example.com/image.jpg"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-            />
-            <p className="text-xs text-gray-500 mt-1">Image shown when sharing on WhatsApp, Twitter, etc.</p>
           </div>
         </div>
 

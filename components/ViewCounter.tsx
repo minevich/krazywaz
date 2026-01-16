@@ -49,8 +49,8 @@ export default function ViewCounter({ shiurId, showBreakdown = true }: ViewCount
         )
     }
 
-    if (!analytics || analytics.totalViews === 0) {
-        return null // Don't show if no views
+    if (!analytics) {
+        return null // Only hide if fetch failed
     }
 
     return (

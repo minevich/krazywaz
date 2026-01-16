@@ -40,8 +40,8 @@ export function extractYouTubeVideoId(url: string | null | undefined): string | 
 
 export function getYouTubeThumbnail(videoId: string | null): string | null {
   if (!videoId) return null
-  // Use maxresdefault for best quality, fallback to hqdefault
-  return `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`
+  // Use hqdefault for reliable quality (maxresdefault doesn't always exist)
+  return `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`
 }
 
 export function getShiurUrl(shiur: { id: string, slug: string | null }): string {
