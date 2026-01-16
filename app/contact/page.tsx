@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Header from '@/components/Header'
+import Footer from '@/components/Footer'
 import { Send, Phone, Mail, MessageSquare } from 'lucide-react'
 
 const SUBJECT_OPTIONS = [
@@ -218,12 +219,7 @@ export default function ContactPage() {
                 )}
             </main>
 
-            {/* Footer */}
-            <footer className="bg-primary text-white/70 py-8 px-4 mt-auto">
-                <div className="max-w-4xl mx-auto text-center text-sm">
-                    <p>© {new Date().getFullYear()} Rabbi Kraz's Shiurim. All rights reserved.</p>
-                </div>
-            </footer>
+            <Footer />
         </div>
     )
 }

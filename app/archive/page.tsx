@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { formatDate, formatDuration, getShiurUrl } from '@/lib/utils'
 import Header from '@/components/Header'
+import Footer from '@/components/Footer'
 import PlayButton from '@/components/PlayButton'
 import { Calendar, Clock, Info } from 'lucide-react'
 import { getDb, getD1Database } from '@/lib/db'
@@ -187,6 +188,7 @@ export default async function ArchivePage({
           </>
         )}
       </main>
+      <Footer />
     </div>
   )
 }

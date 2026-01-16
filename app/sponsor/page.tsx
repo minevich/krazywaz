@@ -1,4 +1,5 @@
 import Header from '@/components/Header'
+import Footer from '@/components/Footer'
 import SponsorshipForm, { PastSponsors } from '@/components/sponsorship/SponsorshipForm'
 
 export const metadata = {
@@ -60,11 +61,7 @@ export default function SponsorPage() {
         </div>
       </main>
 
-      <footer className="text-center py-8 border-t">
-        <p className="text-sm text-gray-400">
-          © {new Date().getFullYear()} Rabbi Kraz. Secure payments by Stripe.
-        </p>
-      </footer>
+      <Footer />
     </div>
   )
 }

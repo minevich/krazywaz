@@ -1,4 +1,5 @@
 import Header from '@/components/Header'
+import Footer from '@/components/Footer'
 import { ExternalLink, Play } from 'lucide-react'
 import { YOUTUBE_API_KEY, YOUTUBE_CHANNEL_ID } from '@/lib/youtube'
 import PlaylistCategory from '@/components/PlaylistCategory'
@@ -181,6 +182,8 @@ export default async function PlaylistsPage() {
           </div>
         )}
       </main>
+      <Footer />
     </div>
   )
 }
+

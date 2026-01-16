@@ -1,4 +1,5 @@
 import Header from '@/components/Header'
+import Footer from '@/components/Footer'
 import { ExternalLink, Play, Clock, Eye, Calendar } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 import VideoFilters from '@/components/VideoFilters'
@@ -209,6 +210,7 @@ export default async function VideosPage({
           </div>
         )}
       </main>
+      <Footer />
     </div>
   )
 }

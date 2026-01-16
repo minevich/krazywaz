@@ -6,6 +6,7 @@ import PlatformLinks from '@/components/PlatformLinks'
 import SourceSheetViewer from '@/components/SourceSheetViewer'
 import StickyAudioPlayer from '@/components/StickyAudioPlayer'
 import ViewCounter from '@/components/ViewCounter'
+import Footer from '@/components/Footer'
 import { getDb, getD1Database } from '@/lib/db'
 import { shiurim, platformLinks } from '@/lib/schema'
 import { eq } from 'drizzle-orm'
@@ -177,6 +178,8 @@ export default async function ShiurPage({ params }: { params: Promise<{ id: stri
           )
         })()}
       </main>
+
+      <Footer />
 
       {/* Sticky Audio Player - Fixed at Bottom */}
       <StickyAudioPlayer shiur={shiur} />

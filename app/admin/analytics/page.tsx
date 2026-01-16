@@ -35,7 +35,7 @@ export default function AdminAnalyticsPage() {
     const [summary, setSummary] = useState<AnalyticsSummary | null>(null)
     const [loading, setLoading] = useState(true)
     const [syncing, setSyncing] = useState(false)
-    const [sortBy, setSortBy] = useState<'title' | 'website' | 'youtube' | 'spotify' | 'total'>('total')
+    const [sortBy, setSortBy] = useState<'number' | 'title' | 'website' | 'youtube' | 'spotify' | 'total'>('total')
     const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
     const [showImport, setShowImport] = useState(false)
     const [importPlatform, setImportPlatform] = useState<'spotify' | 'apple' | 'amazon'>('spotify')
@@ -157,13 +157,23 @@ export default function AdminAnalyticsPage() {
             setSortDir(sortDir === 'asc' ? 'desc' : 'asc')
         } else {
             setSortBy(column)
-            setSortDir(column === 'title' ? 'asc' : 'desc') // Default: A-Z for title, high-low for numbers
+            setSortDir(column === 'title' ? 'asc' : (column === 'number' ? 'asc' : 'desc'))
         }
     }
 
-    const sortedAnalytics = [...analytics].sort((a, b) => {
+    // Calculate shiur numbers (oldest = 1, newest = highest)
+    const analyticsWithNumbers = analytics
+        .map(item => ({ ...item }))
+        .sort((a, b) => new Date(a.pubDate).getTime() - new Date(b.pubDate).getTime())
+        .map((item, idx) => ({ ...item, shiurNumber: idx + 1 }))
+
+    // Create a lookup map for shiur numbers
+    const shiurNumberMap = new Map(analyticsWithNumbers.map(item => [item.shiurId, item.shiurNumber]))
+
+    const sortedAnalytics = [...analyticsWithNumbers].sort((a, b) => {
         let compare = 0
         switch (sortBy) {
+            case 'number': compare = a.shiurNumber - b.shiurNumber; break
             case 'title': compare = a.title.localeCompare(b.title); break
             case 'website': compare = a.websiteViews - b.websiteViews; break
             case 'youtube': compare = a.youtubeViews - b.youtubeViews; break
@@ -278,7 +288,7 @@ export default function AdminAnalyticsPage() {
             <div className="max-w-7xl mx-auto px-4 py-8">
                 {/* Summary Cards */}
                 {summary && (
-                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-8">
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
                         <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
                             <div className="flex items-center gap-2 text-gray-500 text-sm mb-1">
                                 <Eye className="w-4 h-4" />
@@ -289,7 +299,7 @@ export default function AdminAnalyticsPage() {
                         <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
                             <div className="flex items-center gap-2 text-gray-500 text-sm mb-1">
                                 <BarChart3 className="w-4 h-4" />
-                                Website
+                                Listens
                             </div>
                             <div className="text-2xl font-bold text-blue-600">{formatNumber(summary.totalWebsite)}</div>
                         </div>
@@ -309,19 +319,6 @@ export default function AdminAnalyticsPage() {
                         </div>
                         <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
                             <div className="flex items-center gap-2 text-gray-500 text-sm mb-1">
-                                <Apple className="w-4 h-4" />
-                                Apple
-                            </div>
-                            <div className="text-2xl font-bold text-gray-700">{formatNumber(summary.totalApple)}</div>
-                        </div>
-                        <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-                            <div className="flex items-center gap-2 text-gray-500 text-sm mb-1">
-                                Amazon
-                            </div>
-                            <div className="text-2xl font-bold text-orange-600">{formatNumber(summary.totalAmazon)}</div>
-                        </div>
-                        <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-                            <div className="flex items-center gap-2 text-gray-500 text-sm mb-1">
                                 <TrendingUp className="w-4 h-4" />
                                 Shiurim
                             </div>
@@ -337,8 +334,11 @@ export default function AdminAnalyticsPage() {
                         <table className="min-w-full divide-y divide-gray-200">
                             <thead className="bg-gray-50">
                                 <tr>
-                                    <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-12">
-                                        #
+                                    <th
+                                        onClick={() => handleSort('number')}
+                                        className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-16 cursor-pointer hover:bg-gray-100 select-none"
+                                    >
+                                        # {sortBy === 'number' && (sortDir === 'asc' ? '↑' : '↓')}
                                     </th>
                                     <th
                                         onClick={() => handleSort('title')}
@@ -373,10 +373,10 @@ export default function AdminAnalyticsPage() {
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
-                                {sortedAnalytics.map((item, index) => (
+                                {sortedAnalytics.map((item) => (
                                     <tr key={item.shiurId} className="hover:bg-gray-50">
                                         <td className="px-3 py-4 text-center text-sm text-gray-400 font-medium">
-                                            {index + 1}
+                                            {item.shiurNumber}
                                         </td>
                                         <td className="px-6 py-4">
                                             <div>

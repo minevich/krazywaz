@@ -5,6 +5,7 @@ import { formatDate, formatDuration, extractYouTubeVideoId, getYouTubeThumbnail 
 import PlatformLinks from '@/components/PlatformLinks'
 import SourceSheetViewer from '@/components/SourceSheetViewer'
 import StickyAudioPlayer from '@/components/StickyAudioPlayer'
+import Footer from '@/components/Footer'
 import { getDb, getD1Database } from '@/lib/db'
 import { shiurim, platformLinks } from '@/lib/schema'
 import { eq, or } from 'drizzle-orm'
@@ -168,6 +169,8 @@ export default async function SlugPage({ params }: { params: Promise<{ slug: str
                     )
                 })()}
             </main>
+
+            <Footer />
 
             <StickyAudioPlayer shiur={shiur} />
         </div>
