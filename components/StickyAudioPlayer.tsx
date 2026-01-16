@@ -135,7 +135,7 @@ export default function StickyAudioPlayer({ shiur }: StickyAudioPlayerProps) {
                 <audio ref={audioRef} src={shiur.audioUrl} preload="metadata" />
                 <button
                     onClick={() => setIsMinimized(false)}
-                    className="fixed bottom-20 md:bottom-4 right-4 z-50 bg-white/95 backdrop-blur text-primary px-3 py-2 rounded-full shadow-lg border border-gray-100 hover:scale-105 transition-transform flex items-center gap-2 font-medium text-xs group"
+                    className="fixed bottom-12 md:bottom-4 right-4 z-50 bg-white/95 backdrop-blur text-primary px-3 py-2 rounded-full shadow-lg border border-gray-100 hover:scale-105 transition-transform flex items-center gap-2 font-medium text-xs group"
                 >
                     <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
                         {isPlaying ? <Pause size={10} fill="currentColor" /> : <Play size={10} fill="currentColor" className="ml-0.5" />}
