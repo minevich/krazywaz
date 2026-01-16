@@ -137,10 +137,10 @@ export default async function ArchivePage({
             </div>
 
             {totalPages > 1 && (
-              <div className="flex items-center justify-center gap-2 mt-8">
+              <div className="flex flex-wrap items-center justify-center gap-2 mt-8">
                 <Link
                   href={`/archive?page=${Math.max(1, page - 1)}`}
-                  className={`px-4 py-2 rounded-lg border transition-colors ${page === 1
+                  className={`px-3 md:px-4 py-2 text-sm rounded-lg border transition-colors ${page === 1
                     ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200'
                     : 'bg-white text-primary hover:bg-gray-50 border-gray-200'
                     }`}
@@ -165,7 +165,7 @@ export default async function ArchivePage({
                       <Link
                         key={pageNum}
                         href={`/archive?page=${pageNum}`}
-                        className={`px-4 py-2 rounded-lg border transition-colors ${pageNum === page
+                        className={`px-3 md:px-4 py-2 text-sm rounded-lg border transition-colors ${pageNum === page
                           ? 'bg-primary text-white border-primary'
                           : 'bg-white text-primary hover:bg-gray-50 border-gray-200'
                           }`}
@@ -178,7 +178,7 @@ export default async function ArchivePage({
 
                 <Link
                   href={`/archive?page=${Math.min(totalPages, page + 1)}`}
-                  className={`px-4 py-2 rounded-lg border transition-colors ${page === totalPages
+                  className={`px-3 md:px-4 py-2 text-sm rounded-lg border transition-colors ${page === totalPages
                     ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200'
                     : 'bg-white text-primary hover:bg-gray-50 border-gray-200'
                     }`}
