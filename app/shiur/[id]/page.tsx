@@ -172,7 +172,7 @@ export default async function ShiurPage({ params }: { params: Promise<{ id: stri
               <img
                 src={thumbnailUrl}
                 alt={shiur.title}
-                className="w-full max-w-2xl mx-auto rounded-xl shadow-md"
+                className="w-full max-w-2xl mx-auto rounded-xl shadow-md aspect-video object-cover"
               />
             </div>
           )

@@ -1,7 +1,20 @@
+'use client'
+
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import SearchBar from './SearchBar'
 
 export default function Header() {
+  const pathname = usePathname()
+
+  const isActive = (path: string) => {
+    if (path === '/') return pathname === '/'
+    return pathname.startsWith(path)
+  }
+
+  const activeClass = "px-5 py-2 md:px-6 md:py-2.5 text-sm md:text-base rounded-full font-medium shadow-lg hover:shadow-xl transition-all bg-white text-primary hover:-translate-y-0.5"
+  const inactiveClass = "px-5 py-2 md:px-6 md:py-2.5 text-sm md:text-base rounded-full font-medium shadow-lg hover:shadow-xl transition-all bg-white/10 hover:bg-white/20 text-white border border-white/20 backdrop-blur-sm hover:-translate-y-0.5"
+
   return (
     <header className="relative text-white text-center py-4 md:py-10 px-4" style={{ background: 'linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--secondary)) 100%)' }}>
       <div className="absolute inset-0 opacity-10 bg-[url('data:image/svg+xml;base64,...')] mix-blend-overlay overflow-hidden"></div>
@@ -26,34 +39,19 @@ export default function Header() {
         </div>
 
         <div className="mt-4 md:mt-6 flex flex-wrap justify-center gap-2 md:gap-4">
-          <Link
-            className="px-5 py-2 md:px-6 md:py-2.5 text-sm md:text-base rounded-full font-medium shadow-lg hover:shadow-xl transition-all bg-white text-primary hover:-translate-y-0.5"
-            href="/"
-          >
+          <Link className={isActive('/') ? activeClass : inactiveClass} href="/">
             Home
           </Link>
-          <Link
-            className="px-5 py-2 md:px-6 md:py-2.5 text-sm md:text-base rounded-full font-medium shadow-lg hover:shadow-xl transition-all bg-white/10 hover:bg-white/20 text-white border border-white/20 backdrop-blur-sm hover:-translate-y-0.5"
-            href="/playlists"
-          >
+          <Link className={isActive('/playlists') ? activeClass : inactiveClass} href="/playlists">
             Playlists
           </Link>
-          <Link
-            className="px-5 py-2 md:px-6 md:py-2.5 text-sm md:text-base rounded-full font-medium shadow-lg hover:shadow-xl transition-all bg-white/10 hover:bg-white/20 text-white border border-white/20 backdrop-blur-sm hover:-translate-y-0.5"
-            href="/archive"
-          >
+          <Link className={isActive('/archive') ? activeClass : inactiveClass} href="/archive">
             All Shiurim
           </Link>
-          <Link
-            className="px-5 py-2 md:px-6 md:py-2.5 text-sm md:text-base rounded-full font-medium shadow-lg hover:shadow-xl transition-all bg-white/10 hover:bg-white/20 text-white border border-white/20 backdrop-blur-sm hover:-translate-y-0.5"
-            href="/videos"
-          >
+          <Link className={isActive('/videos') ? activeClass : inactiveClass} href="/videos">
             Videos
           </Link>
-          <Link
-            className="px-5 py-2 md:px-6 md:py-2.5 text-sm md:text-base rounded-full font-medium shadow-lg hover:shadow-xl transition-all bg-white/10 hover:bg-white/20 text-white border border-white/20 backdrop-blur-sm hover:-translate-y-0.5"
-            href="/contact"
-          >
+          <Link className={isActive('/contact') ? activeClass : inactiveClass} href="/contact">
             Contact
           </Link>
           <Link
@@ -67,4 +65,3 @@ export default function Header() {
     </header>
   )
 }
-

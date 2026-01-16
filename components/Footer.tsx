@@ -4,15 +4,24 @@ import Link from 'next/link'
 
 interface FooterProps {
     withStickyPlayer?: boolean
+    isPlayerMinimized?: boolean
 }
 
-export default function Footer({ withStickyPlayer = false }: FooterProps) {
+export default function Footer({ withStickyPlayer = false, isPlayerMinimized = false }: FooterProps) {
+    // On shiur pages with player: use less padding when minimized, more when expanded
+    const paddingClass = withStickyPlayer
+        ? (isPlayerMinimized ? 'pb-8' : 'pb-20 md:pb-8')
+        : ''
+
     return (
-        <footer className={`bg-primary text-white py-8 mt-auto ${withStickyPlayer ? 'pb-24 md:pb-8' : ''}`}>
+        <footer className={`bg-primary text-white py-6 mt-auto ${paddingClass}`}>
             <div className="max-w-7xl mx-auto px-4 text-center">
-                <p className="opacity-80 mb-4">
-                    © {new Date().getFullYear()} Rabbi Kraz's Shiurim. All rights reserved.
-                </p>
+                {/* Hide copyright on shiur pages */}
+                {!withStickyPlayer && (
+                    <p className="opacity-80 mb-4">
+                        © {new Date().getFullYear()} Rabbi Kraz's Shiurim. All rights reserved.
+                    </p>
+                )}
                 <div className="flex flex-col md:flex-row items-center justify-center gap-6 text-sm text-blue-200">
                     <div className="flex gap-6">
                         <Link className="hover:text-white transition-colors" href="/">

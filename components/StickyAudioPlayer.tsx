@@ -152,8 +152,8 @@ export default function StickyAudioPlayer({ shiur }: StickyAudioPlayerProps) {
             <div className="fixed bottom-0 left-0 right-0 z-50 pointer-events-none">
                 {/* Floating Island Design on Desktop, Full Width on Mobile */}
                 <div className="mx-auto max-w-3xl md:mb-6 pointer-events-auto">
-                    {/* Padding Adjust: py-3 mobile, md:px-6 md:py-2 desktop (Compact) */}
-                    <div className="bg-white/95 backdrop-blur-md md:rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border-t md:border border-gray-200/50 px-4 py-3 md:px-6 md:py-2 safe-area-pb relative group/player">
+                    {/* Padding Adjust: py-2 mobile, md:px-6 md:py-2 desktop (Compact) */}
+                    <div className="bg-white/95 backdrop-blur-md md:rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border-t md:border border-gray-200/50 px-4 py-2 md:px-6 md:py-2 safe-area-pb relative group/player">
 
                         {/* Option 4: "Outside" Button for Desktop */}
                         {/* We position this absolute relative to the player container. */}
