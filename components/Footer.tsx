@@ -20,7 +20,7 @@ export default function Footer({ withStickyPlayer = false, isPlayerMinimized = f
             <div className="max-w-7xl mx-auto px-4 text-center">
                 {/* Mobile shiur page: nice compact footer matching player style */}
                 {withStickyPlayer && (
-                    <div className="md:hidden relative">
+                    <div className="md:hidden">
                         <div className="flex items-center justify-center gap-3 text-sm text-blue-200">
                             <Link className="hover:text-white transition-colors font-medium" href="/">Home</Link>
                             <span className="text-white/30">•</span>
@@ -39,7 +39,7 @@ export default function Footer({ withStickyPlayer = false, isPlayerMinimized = f
                                 </svg>
                             </a>
                         </div>
-                        <span className="absolute bottom-0 right-0 text-[8px] text-white/20">©{new Date().getFullYear()}</span>
+                        <p className="text-[8px] text-white/20 mt-1 text-center">©{new Date().getFullYear()}</p>
                     </div>
                 )}
 

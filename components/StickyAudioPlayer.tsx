@@ -129,9 +129,12 @@ export default function StickyAudioPlayer({ shiur }: StickyAudioPlayerProps) {
 
     const progress = duration > 0 ? (currentTime / duration) * 100 : 0
     const [buttonOffset, setButtonOffset] = useState(0)
+    const rafRef = useRef<number | null>(null)
 
-    // Calculate pixel-based offset for smooth footer attachment
+    // Calculate pixel-based offset for smooth footer attachment using requestAnimationFrame
     useEffect(() => {
+        let lastOffset = 0
+
         const updateButtonPosition = () => {
             const footer = document.querySelector('footer')
             if (!footer) return
@@ -140,22 +143,35 @@ export default function StickyAudioPlayer({ shiur }: StickyAudioPlayerProps) {
             const viewportHeight = window.innerHeight
 
             // Calculate how much footer is visible
+            let newOffset = 0
             if (rect.top < viewportHeight) {
-                // Footer is in view - calculate offset from bottom
-                const footerVisibleHeight = viewportHeight - rect.top
-                setButtonOffset(footerVisibleHeight)
-            } else {
-                setButtonOffset(0)
+                newOffset = viewportHeight - rect.top
+            }
+
+            // Only update state if offset changed (avoid unnecessary re-renders)
+            if (newOffset !== lastOffset) {
+                lastOffset = newOffset
+                setButtonOffset(newOffset)
             }
         }
 
-        window.addEventListener('scroll', updateButtonPosition, { passive: true })
+        const onScroll = () => {
+            if (rafRef.current) {
+                cancelAnimationFrame(rafRef.current)
+            }
+            rafRef.current = requestAnimationFrame(updateButtonPosition)
+        }
+
+        window.addEventListener('scroll', onScroll, { passive: true })
         window.addEventListener('resize', updateButtonPosition, { passive: true })
         updateButtonPosition()
 
         return () => {
-            window.removeEventListener('scroll', updateButtonPosition)
+            window.removeEventListener('scroll', onScroll)
             window.removeEventListener('resize', updateButtonPosition)
+            if (rafRef.current) {
+                cancelAnimationFrame(rafRef.current)
+            }
         }
     }, [])
 
@@ -163,14 +179,14 @@ export default function StickyAudioPlayer({ shiur }: StickyAudioPlayerProps) {
         return (
             <>
                 <audio ref={audioRef} src={shiur.audioUrl} preload="metadata" />
-                {/* Mobile: Fixed bottom bar matching footer style */}
+                {/* Mobile: Fixed bottom bar matching footer style - thinner */}
                 <button
                     onClick={() => setIsMinimized(false)}
-                    style={{ bottom: `${buttonOffset}px` }}
-                    className="md:hidden fixed left-0 right-0 z-50 bg-primary text-white px-4 py-3 flex items-center justify-center gap-3 font-medium text-sm transition-all duration-75"
+                    style={{ transform: `translateY(-${buttonOffset}px)` }}
+                    className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-primary text-white px-4 py-2 flex items-center justify-center gap-2 font-medium text-sm"
                 >
-                    <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
-                        {isPlaying ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" className="ml-0.5" />}
+                    <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center">
+                        {isPlaying ? <Pause size={12} fill="currentColor" /> : <Play size={12} fill="currentColor" className="ml-0.5" />}
                     </div>
                     <span>Tap to Listen</span>
                 </button>
