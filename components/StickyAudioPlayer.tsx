@@ -18,9 +18,10 @@ export default function StickyAudioPlayer({ shiur }: StickyAudioPlayerProps) {
     const [isPlaying, setIsPlaying] = useState(false)
     const [currentTime, setCurrentTime] = useState(0)
     const [duration, setDuration] = useState(0)
-    const [isMinimized, setIsMinimized] = useState(false)
+    const [isMinimized, setIsMinimized] = useState(true) // Start minimized on mobile
     const [playbackRate, setPlaybackRate] = useState(1)
     const [showSpeedMenu, setShowSpeedMenu] = useState(false)
+    const [footerVisible, setFooterVisible] = useState(false)
 
     const audioRef = useRef<HTMLAudioElement>(null)
     const isDraggingRef = useRef(false) // Track if user is actively scrubbing
@@ -37,6 +38,28 @@ export default function StickyAudioPlayer({ shiur }: StickyAudioPlayerProps) {
             body: JSON.stringify({ shiurId: shiur.id, source: 'website' }),
         }).catch(() => { }) // Silent fail
     }
+
+    // Detect if footer is visible for scroll-reactive button positioning
+    useEffect(() => {
+        const checkFooterVisibility = () => {
+            const footer = document.querySelector('footer')
+            if (!footer) return
+
+            const rect = footer.getBoundingClientRect()
+            const isVisible = rect.top < window.innerHeight
+            setFooterVisible(isVisible)
+        }
+
+        // Check on scroll and resize
+        window.addEventListener('scroll', checkFooterVisibility, { passive: true })
+        window.addEventListener('resize', checkFooterVisibility, { passive: true })
+        checkFooterVisibility() // Initial check
+
+        return () => {
+            window.removeEventListener('scroll', checkFooterVisibility)
+            window.removeEventListener('resize', checkFooterVisibility)
+        }
+    }, [])
 
     useEffect(() => {
         const audio = audioRef.current
@@ -130,17 +153,23 @@ export default function StickyAudioPlayer({ shiur }: StickyAudioPlayerProps) {
     const progress = duration > 0 ? (currentTime / duration) * 100 : 0
 
     if (isMinimized) {
+        // Calculate button position based on footer visibility
+        // When footer visible: position above footer; when not: fixed corner
+        const buttonPosition = footerVisible
+            ? 'bottom-16 md:bottom-4' // Above footer on mobile
+            : 'bottom-4' // Corner position
+
         return (
             <>
                 <audio ref={audioRef} src={shiur.audioUrl} preload="metadata" />
                 <button
                     onClick={() => setIsMinimized(false)}
-                    className="fixed bottom-12 md:bottom-4 right-4 z-50 bg-white/95 backdrop-blur text-primary px-3 py-2 rounded-full shadow-lg border border-gray-100 hover:scale-105 transition-transform flex items-center gap-2 font-medium text-xs group"
+                    className={`fixed ${buttonPosition} right-4 z-50 bg-white/95 backdrop-blur text-primary px-4 py-2.5 rounded-full shadow-lg border border-gray-100 hover:scale-105 transition-all flex items-center gap-2 font-medium text-sm group`}
                 >
-                    <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-                        {isPlaying ? <Pause size={10} fill="currentColor" /> : <Play size={10} fill="currentColor" className="ml-0.5" />}
+                    <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
+                        {isPlaying ? <Pause size={12} fill="currentColor" /> : <Play size={12} fill="currentColor" className="ml-0.5" />}
                     </div>
-                    <span>Resume</span>
+                    <span>Listen</span>
                 </button>
             </>
         )
