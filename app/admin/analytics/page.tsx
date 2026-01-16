@@ -35,7 +35,7 @@ export default function AdminAnalyticsPage() {
     const [summary, setSummary] = useState<AnalyticsSummary | null>(null)
     const [loading, setLoading] = useState(true)
     const [syncing, setSyncing] = useState(false)
-    const [sortBy, setSortBy] = useState<'total' | 'website' | 'youtube' | 'date'>('total')
+    const [sortBy, setSortBy] = useState<'title' | 'website' | 'youtube' | 'spotify' | 'total'>('total')
     const [showImport, setShowImport] = useState(false)
     const [importPlatform, setImportPlatform] = useState<'spotify' | 'apple' | 'amazon'>('spotify')
     const [importing, setImporting] = useState(false)
@@ -113,10 +113,11 @@ export default function AdminAnalyticsPage() {
 
             for (let i = 1; i < lines.length; i++) { // Skip header
                 const parts = parseCSVLine(lines[i])
-                if (parts.length >= 5) {
-                    const episodeName = parts[0].replace(/"/g, '').trim()
-                    // Spotify: Streams is at index 4
-                    const plays = parseInt(parts[4].replace(/"/g, '').replace(/,/g, '').trim(), 10) || 0
+                if (parts.length >= 6) {
+                    // Spotify format: Ranking, Episode, Date, Type, Starts, Streams, Listeners...
+                    // Column 1 = Episode name, Column 5 = Streams
+                    const episodeName = parts[1].replace(/"/g, '').trim()
+                    const plays = parseInt(parts[5].replace(/"/g, '').replace(/,/g, '').trim(), 10) || 0
                     if (episodeName && plays > 0) {
                         data.push({ episodeName, plays })
                     }
@@ -153,10 +154,11 @@ export default function AdminAnalyticsPage() {
 
     const sortedAnalytics = [...analytics].sort((a, b) => {
         switch (sortBy) {
-            case 'total': return b.totalViews - a.totalViews
+            case 'title': return a.title.localeCompare(b.title)
             case 'website': return b.websiteViews - a.websiteViews
             case 'youtube': return b.youtubeViews - a.youtubeViews
-            case 'date': return new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime()
+            case 'spotify': return b.spotifyPlays - a.spotifyPlays
+            case 'total': return b.totalViews - a.totalViews
             default: return 0
         }
     })
@@ -318,29 +320,6 @@ export default function AdminAnalyticsPage() {
                     </div>
                 )}
 
-                {/* Sort Controls */}
-                <div className="flex items-center gap-4 mb-4">
-                    <span className="text-sm text-gray-500">Sort by:</span>
-                    <div className="flex gap-2">
-                        {[
-                            { key: 'total', label: 'Total Views' },
-                            { key: 'website', label: 'Website' },
-                            { key: 'youtube', label: 'YouTube' },
-                            { key: 'date', label: 'Date' },
-                        ].map(({ key, label }) => (
-                            <button
-                                key={key}
-                                onClick={() => setSortBy(key as typeof sortBy)}
-                                className={`px-3 py-1 text-sm rounded-full transition-colors ${sortBy === key
-                                    ? 'bg-primary text-white'
-                                    : 'bg-white text-gray-600 hover:bg-gray-100'
-                                    }`}
-                            >
-                                {label}
-                            </button>
-                        ))}
-                    </div>
-                </div>
 
                 {/* Analytics Table */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
@@ -348,26 +327,35 @@ export default function AdminAnalyticsPage() {
                         <table className="min-w-full divide-y divide-gray-200">
                             <thead className="bg-gray-50">
                                 <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Shiur
+                                    <th
+                                        onClick={() => setSortBy('title')}
+                                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                                    >
+                                        Shiur {sortBy === 'title' && '↑'}
                                     </th>
-                                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Website
+                                    <th
+                                        onClick={() => setSortBy('website')}
+                                        className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                                    >
+                                        Listens {sortBy === 'website' && '↓'}
                                     </th>
-                                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        YouTube
+                                    <th
+                                        onClick={() => setSortBy('youtube')}
+                                        className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                                    >
+                                        YouTube {sortBy === 'youtube' && '↓'}
                                     </th>
-                                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Spotify
+                                    <th
+                                        onClick={() => setSortBy('spotify')}
+                                        className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                                    >
+                                        Spotify {sortBy === 'spotify' && '↓'}
                                     </th>
-                                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Apple
-                                    </th>
-                                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Amazon
-                                    </th>
-                                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Total
+                                    <th
+                                        onClick={() => setSortBy('total')}
+                                        className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                                    >
+                                        Total {sortBy === 'total' && '↓'}
                                     </th>
                                 </tr>
                             </thead>
@@ -396,12 +384,6 @@ export default function AdminAnalyticsPage() {
                                         <td className="px-4 py-4 text-center text-sm text-green-600 font-medium">
                                             {formatNumber(item.spotifyPlays)}
                                         </td>
-                                        <td className="px-4 py-4 text-center text-sm text-gray-700 font-medium">
-                                            {formatNumber(item.applePlays)}
-                                        </td>
-                                        <td className="px-4 py-4 text-center text-sm text-orange-600 font-medium">
-                                            {formatNumber(item.amazonPlays)}
-                                        </td>
                                         <td className="px-4 py-4 text-center">
                                             <span className="text-sm font-bold text-primary">
                                                 {formatNumber(item.totalViews)}
@@ -411,7 +393,7 @@ export default function AdminAnalyticsPage() {
                                 ))}
                                 {sortedAnalytics.length === 0 && (
                                     <tr>
-                                        <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
+                                        <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
                                             No analytics data yet. Views will appear after users visit shiur pages.
                                         </td>
                                     </tr>

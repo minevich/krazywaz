@@ -5,6 +5,7 @@ import { Play, Pause, RotateCcw, RotateCw, ChevronUp, ChevronDown } from 'lucide
 
 interface StickyAudioPlayerProps {
     shiur: {
+        id: string
         title: string
         audioUrl: string
         duration?: string | null
@@ -23,6 +24,19 @@ export default function StickyAudioPlayer({ shiur }: StickyAudioPlayerProps) {
 
     const audioRef = useRef<HTMLAudioElement>(null)
     const isDraggingRef = useRef(false) // Track if user is actively scrubbing
+    const hasTrackedListenRef = useRef(false) // Only track listen once per session
+
+    // Track listen when audio is first played
+    const trackListen = () => {
+        if (hasTrackedListenRef.current) return
+        hasTrackedListenRef.current = true
+
+        fetch('/api/analytics/track', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ shiurId: shiur.id, source: 'website' }),
+        }).catch(() => { }) // Silent fail
+    }
 
     useEffect(() => {
         const audio = audioRef.current
@@ -67,6 +81,7 @@ export default function StickyAudioPlayer({ shiur }: StickyAudioPlayerProps) {
             audio.pause()
         } else {
             audio.play()
+            trackListen() // Track on first play
         }
         setIsPlaying(!isPlaying)
     }

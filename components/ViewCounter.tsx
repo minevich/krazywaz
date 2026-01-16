@@ -24,14 +24,7 @@ export default function ViewCounter({ shiurId, showBreakdown = true }: ViewCount
     const [showDetails, setShowDetails] = useState(false)
 
     useEffect(() => {
-        // Track the view
-        fetch('/api/analytics/track', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ shiurId, source: 'website' }),
-        }).catch(() => { }) // Silent fail for tracking
-
-        // Fetch analytics
+        // Fetch analytics (no longer tracking here - tracking happens on audio play)
         fetch(`/api/analytics/${shiurId}`)
             .then(res => res.json() as Promise<Analytics>)
             .then((data: Analytics) => {
