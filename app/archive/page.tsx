@@ -3,6 +3,7 @@ import { formatDate, formatDuration, getShiurUrl } from '@/lib/utils'
 import Header from '@/components/Header'
 import Footer from '@/components/Footer'
 import PlayButton from '@/components/PlayButton'
+import ViewCounter from '@/components/ViewCounter'
 import { Calendar, Clock, Info } from 'lucide-react'
 import { getDb, getD1Database } from '@/lib/db'
 import { shiurim, platformLinks } from '@/lib/schema'
@@ -103,7 +104,7 @@ export default async function ArchivePage({
                         <Link href={getShiurUrl(shiur)}>{shiur.title}</Link>
                       </h3>
                     </div>
-                    <div className="flex items-center gap-4 text-xs text-muted-foreground mb-4">
+                    <div className="flex items-center flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground mb-4">
                       <div className="flex items-center gap-1">
                         <Calendar className="w-3.5 h-3.5" />
                         <span>{formatDate(shiur.pubDate)}</span>
@@ -114,6 +115,7 @@ export default async function ArchivePage({
                           <span>{formatDuration(shiur.duration)}</span>
                         </div>
                       )}
+                      <ViewCounter shiurId={shiur.id} showBreakdown={false} />
                     </div>
                     {shiur.blurb && (
                       <p className="text-sm text-gray-600 line-clamp-3 mb-4 flex-1">
