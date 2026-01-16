@@ -21,7 +21,6 @@ export default function StickyAudioPlayer({ shiur }: StickyAudioPlayerProps) {
     const [isMinimized, setIsMinimized] = useState(true) // Start minimized on mobile
     const [playbackRate, setPlaybackRate] = useState(1)
     const [showSpeedMenu, setShowSpeedMenu] = useState(false)
-    const [footerVisible, setFooterVisible] = useState(false)
 
     const audioRef = useRef<HTMLAudioElement>(null)
     const isDraggingRef = useRef(false) // Track if user is actively scrubbing
@@ -38,28 +37,6 @@ export default function StickyAudioPlayer({ shiur }: StickyAudioPlayerProps) {
             body: JSON.stringify({ shiurId: shiur.id, source: 'website' }),
         }).catch(() => { }) // Silent fail
     }
-
-    // Detect if footer is visible for scroll-reactive button positioning
-    useEffect(() => {
-        const checkFooterVisibility = () => {
-            const footer = document.querySelector('footer')
-            if (!footer) return
-
-            const rect = footer.getBoundingClientRect()
-            const isVisible = rect.top < window.innerHeight
-            setFooterVisible(isVisible)
-        }
-
-        // Check on scroll and resize
-        window.addEventListener('scroll', checkFooterVisibility, { passive: true })
-        window.addEventListener('resize', checkFooterVisibility, { passive: true })
-        checkFooterVisibility() // Initial check
-
-        return () => {
-            window.removeEventListener('scroll', checkFooterVisibility)
-            window.removeEventListener('resize', checkFooterVisibility)
-        }
-    }, [])
 
     useEffect(() => {
         const audio = audioRef.current
@@ -151,20 +128,56 @@ export default function StickyAudioPlayer({ shiur }: StickyAudioPlayerProps) {
     }
 
     const progress = duration > 0 ? (currentTime / duration) * 100 : 0
+    const [buttonOffset, setButtonOffset] = useState(0)
+
+    // Calculate pixel-based offset for smooth footer attachment
+    useEffect(() => {
+        const updateButtonPosition = () => {
+            const footer = document.querySelector('footer')
+            if (!footer) return
+
+            const rect = footer.getBoundingClientRect()
+            const viewportHeight = window.innerHeight
+
+            // Calculate how much footer is visible
+            if (rect.top < viewportHeight) {
+                // Footer is in view - calculate offset from bottom
+                const footerVisibleHeight = viewportHeight - rect.top
+                setButtonOffset(footerVisibleHeight)
+            } else {
+                setButtonOffset(0)
+            }
+        }
+
+        window.addEventListener('scroll', updateButtonPosition, { passive: true })
+        window.addEventListener('resize', updateButtonPosition, { passive: true })
+        updateButtonPosition()
+
+        return () => {
+            window.removeEventListener('scroll', updateButtonPosition)
+            window.removeEventListener('resize', updateButtonPosition)
+        }
+    }, [])
 
     if (isMinimized) {
-        // Calculate button position based on footer visibility
-        // When footer visible: position completely above footer; when not: fixed corner
-        const buttonPosition = footerVisible
-            ? 'bottom-14 md:bottom-4' // Above shorter footer on mobile
-            : 'bottom-4' // Corner position
-
         return (
             <>
                 <audio ref={audioRef} src={shiur.audioUrl} preload="metadata" />
+                {/* Mobile: Fixed bottom bar matching footer style */}
                 <button
                     onClick={() => setIsMinimized(false)}
-                    className={`fixed ${buttonPosition} right-4 z-50 bg-white/95 backdrop-blur text-primary px-4 py-2.5 rounded-full shadow-lg border border-gray-100 hover:scale-105 transition-all flex items-center gap-2 font-medium text-sm group`}
+                    style={{ bottom: `${buttonOffset}px` }}
+                    className="md:hidden fixed left-0 right-0 z-50 bg-primary text-white px-4 py-3 flex items-center justify-center gap-3 font-medium text-sm transition-all duration-75"
+                >
+                    <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+                        {isPlaying ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" className="ml-0.5" />}
+                    </div>
+                    <span>Tap to Listen</span>
+                </button>
+                {/* Desktop: Original floating button */}
+                <button
+                    onClick={() => setIsMinimized(false)}
+                    className="hidden md:flex fixed bottom-4 right-4 z-50 bg-white/95 backdrop-blur text-primary px-4 py-2.5 rounded-full shadow-lg border border-gray-100 hover:scale-105 transition-all items-center gap-2 font-medium text-sm group"
                 >
                     <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
                         {isPlaying ? <Pause size={12} fill="currentColor" /> : <Play size={12} fill="currentColor" className="ml-0.5" />}
