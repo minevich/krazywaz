@@ -80,23 +80,23 @@ const platforms = [
 
 export default function PlatformGrid() {
   return (
-    <div className="flex flex-wrap justify-center gap-2 md:gap-3 max-w-6xl mx-auto my-4 md:my-8 px-2 md:px-4">
+    <div className="flex flex-wrap justify-center gap-3 md:gap-3 max-w-6xl mx-auto my-4 md:my-8 px-2 md:px-4">
       {platforms.map((platform) => (
         <Link
           key={platform.name}
           href={platform.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center gap-2 px-4 py-2.5 md:px-4 md:py-2.5 bg-white rounded-lg shadow-sm hover:shadow-md hover:-translate-y-1 active:scale-95 transition-all duration-200 border border-gray-100 group cursor-pointer"
+          className="flex items-center gap-2.5 px-5 py-3 md:px-4 md:py-2.5 bg-white rounded-xl shadow-sm hover:shadow-md hover:-translate-y-1 active:scale-95 transition-all duration-200 border border-gray-100 group cursor-pointer"
         >
-          <div className="h-6 w-6 md:h-6 md:w-6 relative flex items-center justify-center flex-shrink-0">
+          <div className="h-7 w-7 md:h-6 md:w-6 relative flex items-center justify-center flex-shrink-0">
             {platform.customSvg ? (
-              <div className="w-6 h-6 md:w-6 md:h-6">{platform.customSvg}</div>
+              <div className="w-7 h-7 md:w-6 md:h-6">{platform.customSvg}</div>
             ) : (
-              <i className={`${platform.icon} text-xl md:text-xl text-[#4a90e2] group-hover:text-primary transition-colors`}></i>
+              <i className={`${platform.icon} text-2xl md:text-xl text-[#4a90e2] group-hover:text-primary transition-colors`}></i>
             )}
           </div>
-          <span className="font-medium text-sm md:text-sm text-gray-700 group-hover:text-primary transition-colors whitespace-nowrap">
+          <span className="font-medium text-base md:text-sm text-gray-700 group-hover:text-primary transition-colors whitespace-nowrap">
             {platform.name}
           </span>
         </Link>
