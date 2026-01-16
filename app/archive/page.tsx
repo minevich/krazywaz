@@ -74,7 +74,7 @@ export default async function ArchivePage({
   const { shiurim: shiurimList, total, totalPages } = await getAllShiurim(page)
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50/50">
+    <div className="min-h-screen flex flex-col bg-gray-50/50 overflow-x-hidden">
       <Header />
       <main className="flex-1 w-full max-w-7xl mx-auto px-4 py-12">
         <div className="mb-8">
