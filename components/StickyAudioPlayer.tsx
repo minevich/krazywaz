@@ -213,15 +213,14 @@ export default function StickyAudioPlayer({ shiur }: StickyAudioPlayerProps) {
                     {/* Padding Adjust: py-2 mobile, md:px-6 md:py-2 desktop (Compact) */}
                     <div className="bg-white/95 backdrop-blur-md md:rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border-t md:border border-gray-200/50 px-4 py-2 md:px-6 md:py-2 safe-area-pb relative group/player">
 
-                        {/* Option 4: "Outside" Button for Desktop */}
-                        {/* We position this absolute relative to the player container. */}
-                        <div className="hidden md:block absolute left-full top-1/2 -translate-y-1/2 pl-4">
+                        {/* Desktop: Hide button inside player on right */}
+                        <div className="hidden md:block absolute right-2 top-1/2 -translate-y-1/2">
                             <button
                                 onClick={() => setIsMinimized(true)}
-                                className="bg-white/80 hover:bg-white text-gray-500 hover:text-primary backdrop-blur-md shadow-sm border border-white/20 py-1.5 px-3 rounded-full flex items-center gap-1.5 transition-all hover:shadow-md whitespace-nowrap"
+                                className="bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-primary py-1.5 px-3 rounded-full flex items-center gap-1.5 transition-all whitespace-nowrap"
                                 title="Collapse Player"
                             >
-                                <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 group-hover/btn:text-primary">Hide</span>
+                                <span className="text-[10px] font-bold uppercase tracking-widest">Hide</span>
                                 <ChevronDown size={14} strokeWidth={2.5} />
                             </button>
                         </div>
@@ -237,7 +236,7 @@ export default function StickyAudioPlayer({ shiur }: StickyAudioPlayerProps) {
                             </button>
                         </div>
 
-                        <div className="flex flex-col gap-2 pt-3 md:pt-0"> {/* No top padding on desktop inner */}
+                        <div className="flex flex-col gap-2 pt-3 md:pt-0 md:pr-20"> {/* No top padding on desktop, but right padding for Hide button */}
                             <div className="flex items-center justify-between gap-4 h-full">
 
                                 {/* Controls Group - Perfectly Centered */}
