@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server'
 
-export const runtime = 'edge'
+
 
 export async function POST(req: Request) {
     try {
-        const body = await req.json()
+        const body = await req.json() as any
         const { name, email, message, phone, subject, shiur } = body
 
         // 1. Basic Validation
@@ -42,7 +42,7 @@ export async function POST(req: Request) {
             headers: { 'Content-Type': 'application/json' },
         })
 
-        const data = await response.json()
+        const data = await response.json() as any
 
         if (data.status === 'success') {
             return NextResponse.json({ success: true })
