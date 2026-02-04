@@ -48,9 +48,7 @@ export default function Header() {
           <Link className={isActive('/archive') ? activeClass : inactiveClass} href="/archive">
             All Shiurim
           </Link>
-          <Link className={isActive('/videos') ? activeClass : inactiveClass} href="/videos">
-            Videos
-          </Link>
+
           <Link className={isActive('/contact') ? activeClass : inactiveClass} href="/contact">
             Contact
           </Link>

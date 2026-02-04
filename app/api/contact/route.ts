@@ -1,51 +1,59 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 
-interface ContactFormData {
-    name: string
-    email: string
-    phone?: string
-    subject: string
-    shiur?: string
-    message: string
-}
+export const runtime = 'edge'
 
-// TODO: Replace with Cloudflare Email Worker when domain is configured
-// For now, this just logs the contact form submission
-
-export async function POST(request: NextRequest) {
+export async function POST(req: Request) {
     try {
-        const body = await request.json() as ContactFormData
-        const { name, email, phone, subject, shiur, message } = body
+        const body = await req.json()
+        const { name, email, message, phone, subject, shiur } = body
 
-        // Validate required fields
-        if (!name || !email || !subject || !message) {
+        // 1. Basic Validation
+        if (!name || !email || !message) {
             return NextResponse.json(
-                { error: 'Name, email, subject, and message are required' },
+                { error: 'Missing required fields' },
                 { status: 400 }
             )
         }
 
-        // Log for now (replace with actual email sending later)
-        console.log('=== CONTACT FORM SUBMISSION ===')
-        console.log('From:', name, `<${email}>`)
-        console.log('Phone:', phone || 'Not provided')
-        console.log('Subject:', subject)
-        console.log('Related Shiur:', shiur || 'N/A')
-        console.log('Message:', message)
-        console.log('================================')
+        // 2. Forward to Google Apps Script
+        // Ideally this URL is in process.env.GOOGLE_SCRIPT_URL
+        // But for now we will hardcode the user's script URL once they provide it
+        // or use a placeholder they can replace.
+        const GOOGLE_SCRIPT_URL = process.env.GOOGLE_SCRIPT_URL
 
-        // TODO: Implement Cloudflare Email Worker integration
-        // When domain is set up, send email via:
-        // 1. Cloudflare Email Workers (recommended)
-        // 2. Or use a service like Resend/SendGrid
+        if (!GOOGLE_SCRIPT_URL) {
+            console.error('GOOGLE_SCRIPT_URL is not defined')
+            return NextResponse.json(
+                { error: 'Server configuration error' },
+                { status: 500 }
+            )
+        }
 
-        // For now, return success to allow form testing
-        return NextResponse.json({ success: true, message: 'Message received' })
+        const response = await fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            body: JSON.stringify({
+                name,
+                email,
+                message,
+                phone: phone || '',
+                subject: subject || '',
+                shiur: shiur || ''
+            }),
+            headers: { 'Content-Type': 'application/json' },
+        })
+
+        const data = await response.json()
+
+        if (data.status === 'success') {
+            return NextResponse.json({ success: true })
+        } else {
+            throw new Error(data.message || 'Google Script Error')
+        }
 
     } catch (error) {
-        console.error('Contact form error:', error)
+        console.error('Contact API Error:', error)
         return NextResponse.json(
-            { error: 'Failed to process message' },
+            { error: 'Failed to send message' },
             { status: 500 }
         )
     }
