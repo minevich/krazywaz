@@ -17,3 +17,7 @@ binding = "ASSETS"
 # Environment variables (set via dashboard or wrangler secret)
 [vars]
 NEXT_PUBLIC_BASE_URL = "https://krazywaz.rabbikraz1.workers.dev"
+
+[build]
+command = "npm run build:worker"
+
