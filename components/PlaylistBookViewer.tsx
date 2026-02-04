@@ -140,11 +140,6 @@ export default function PlaylistBookViewer() {
                     }))
 
                 setCategories(categoriesArray)
-
-                // Open first category by default
-                if (categoriesArray.length > 0) {
-                    setOpenCategory(categoriesArray[0].name)
-                }
             } catch (err: any) {
                 setError(err.message || 'Failed to load playlists')
             } finally {
@@ -187,43 +182,43 @@ export default function PlaylistBookViewer() {
     return (
         <div className="max-w-3xl mx-auto space-y-4">
             {categories.map((category) => (
-                <div key={category.name} className="border border-white/10 rounded-xl overflow-hidden bg-white/5 backdrop-blur-sm">
+                <div key={category.name} className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm">
                     {/* Category Header (Clickable) */}
                     <button
                         onClick={() => toggleCategory(category.name)}
-                        className="w-full flex items-center justify-between p-4 md:p-6 text-left transition-colors hover:bg-white/5"
+                        className="w-full flex items-center justify-between p-4 md:p-6 text-left transition-colors hover:bg-gray-50"
                     >
-                        <h2 className="text-xl md:text-2xl font-serif font-bold text-blue-100 flex items-center gap-3">
-                            <span className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-blue-500/20 flex items-center justify-center text-sm md:text-base border border-blue-400/30">
+                        <h2 className="text-xl md:text-2xl font-serif font-bold text-primary flex items-center gap-3">
+                            <span className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-primary/10 flex items-center justify-center text-sm md:text-base text-primary border border-primary/20">
                                 {category.name[0]}
                             </span>
                             {category.name}
-                            <span className="text-sm font-normal text-gray-400">
+                            <span className="text-sm font-normal text-muted-foreground">
                                 ({category.playlists.length})
                             </span>
                         </h2>
                         {openCategory === category.name ? (
-                            <ChevronUp className="w-5 h-5 text-gray-400" />
+                            <ChevronUp className="w-5 h-5 text-muted-foreground" />
                         ) : (
-                            <ChevronDown className="w-5 h-5 text-gray-400" />
+                            <ChevronDown className="w-5 h-5 text-muted-foreground" />
                         )}
                     </button>
 
                     {/* Playlist List (Collapsible) */}
                     <div
                         className={cn(
-                            "transition-all duration-300 ease-in-out border-t border-white/5 overflow-hidden",
+                            "transition-all duration-300 ease-in-out border-t border-gray-100 overflow-hidden",
                             openCategory === category.name ? "max-h-[2000px] opacity-100" : "max-h-0 opacity-0"
                         )}
                     >
-                        <div className="divide-y divide-white/5">
+                        <div className="divide-y divide-gray-100">
                             {category.playlists.map((playlist) => (
                                 <a
                                     key={playlist.id}
                                     href={playlist.playlistUrl}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="flex items-center justify-between p-4 pl-6 md:pl-16 hover:bg-white/5 transition-colors group"
+                                    className="flex items-center justify-between p-4 pl-6 md:pl-16 hover:bg-gray-50 transition-colors group"
                                 >
                                     <div className="flex items-center gap-4">
                                         {playlist.thumbnail && (
@@ -234,16 +229,16 @@ export default function PlaylistBookViewer() {
                                             />
                                         )}
                                         <div>
-                                            <span className="text-base md:text-lg text-gray-200 font-medium tracking-wide group-hover:text-white transition-colors">
+                                            <span className="text-base md:text-lg text-gray-800 font-medium tracking-wide group-hover:text-primary transition-colors">
                                                 {playlist.title}
                                             </span>
-                                            <p className="text-sm text-gray-500">
+                                            <p className="text-sm text-muted-foreground">
                                                 {playlist.videoCount} videos
                                             </p>
                                         </div>
                                     </div>
 
-                                    <div className="p-2 bg-red-600/10 text-red-400 rounded-full group-hover:bg-red-600 group-hover:text-white transition-all transform group-hover:scale-110">
+                                    <div className="p-2 bg-red-50 text-red-500 rounded-full group-hover:bg-red-500 group-hover:text-white transition-all transform group-hover:scale-110">
                                         <Youtube className="w-4 h-4 md:w-5 md:h-5" />
                                     </div>
                                 </a>
