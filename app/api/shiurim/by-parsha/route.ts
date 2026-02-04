@@ -4,8 +4,6 @@ import { shiurim, platformLinks } from '@/lib/schema'
 import { desc, eq } from 'drizzle-orm'
 import { getParshaVariants } from '@/lib/parsha-utils'
 
-export const runtime = 'edge'
-
 export async function GET(request: NextRequest) {
     try {
         const { searchParams } = new URL(request.url)
