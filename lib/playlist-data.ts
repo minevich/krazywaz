@@ -88,5 +88,16 @@ export const PLAYLIST_DATA: BookData[] = [
             { name: 'Haazinu', youtube: '', spotify: '' },
             { name: 'Vezot Haberakhah', youtube: '', spotify: '' },
         ]
+    },
+    {
+        bookName: 'Misc',
+        parshas: [
+            { name: 'Holidays', youtube: '', spotify: '' },
+            { name: 'Halacha', youtube: '', spotify: '' },
+            { name: 'Hashkafa', youtube: '', spotify: '' },
+            { name: 'Mussar', youtube: '', spotify: '' },
+            { name: 'Q&A', youtube: '', spotify: '' },
+            { name: 'Other', youtube: '', spotify: '' },
+        ]
     }
 ]
