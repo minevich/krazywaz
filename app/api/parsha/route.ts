@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server'
 import { normalizeParsha } from '@/lib/parsha-utils'
 
-export const runtime = 'edge'
-
 interface HebcalItem {
     title: string
     date: string

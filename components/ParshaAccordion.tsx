@@ -1,21 +1,16 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import Link from 'next/link'
-import { ChevronDown, BookOpen, Calendar, Clock, Loader2, Info } from 'lucide-react'
-import { cn, formatDate, formatDuration, getShiurUrl } from '@/lib/utils'
-import PlayButton from '@/components/PlayButton'
-import ViewCounter from '@/components/ViewCounter'
+import { ChevronDown, BookOpen, Loader2, Youtube } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
-interface Shiur {
+interface Playlist {
     id: string
     title: string
-    blurb?: string
-    pubDate: string
-    duration?: string
-    audioUrl: string
-    slug?: string | null
-    platformLinks?: any
+    description: string
+    thumbnail: string
+    videoCount: number
+    playlistUrl: string
 }
 
 interface ParshaData {
@@ -24,35 +19,56 @@ interface ParshaData {
     shabbosDate: string
 }
 
-interface ShiurimResponse {
-    parsha: string
-    count: number
-    shiurim: Shiur[]
+// Normalize parsha name for matching (handles spelling variations)
+function normalizeForMatch(name: string): string {
+    return name
+        .toLowerCase()
+        .replace(/['-]/g, '')
+        .replace(/parashat?\s*/i, '')
+        .replace(/^bo$/, 'bo ') // Prevent 'bo' from matching 'bamidbar'
+        .trim()
+}
+
+// Check if a playlist title matches the parsha
+function playlistMatchesParsha(playlistTitle: string, parshaName: string): boolean {
+    const normalizedPlaylist = normalizeForMatch(playlistTitle)
+    const normalizedParsha = normalizeForMatch(parshaName)
+
+    // Check if the parsha name appears in the playlist title
+    return normalizedPlaylist.includes(normalizedParsha) ||
+        normalizedParsha.includes(normalizedPlaylist)
 }
 
 export default function ParshaAccordion() {
     const [isOpen, setIsOpen] = useState(false)
     const [parshaData, setParshaData] = useState<ParshaData | null>(null)
-    const [shiurim, setShiurim] = useState<Shiur[]>([])
+    const [matchingPlaylist, setMatchingPlaylist] = useState<Playlist | null>(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
 
     useEffect(() => {
         async function fetchData() {
             try {
-                // Fetch current parsha
-                const parshaRes = await fetch('/api/parsha')
+                // Fetch current parsha and playlists in parallel
+                const [parshaRes, playlistsRes] = await Promise.all([
+                    fetch('/api/parsha'),
+                    fetch('/api/youtube/playlists')
+                ])
+
                 if (!parshaRes.ok) {
                     throw new Error('Failed to fetch parsha')
                 }
                 const parshaJson = await parshaRes.json() as ParshaData
                 setParshaData(parshaJson)
 
-                // Fetch shiurim for this parsha
-                const shiurimRes = await fetch(`/api/shiurim/by-parsha?parsha=${encodeURIComponent(parshaJson.parsha)}`)
-                if (shiurimRes.ok) {
-                    const shiurimJson: ShiurimResponse = await shiurimRes.json()
-                    setShiurim(shiurimJson.shiurim)
+                if (playlistsRes.ok) {
+                    const playlists: Playlist[] = await playlistsRes.json()
+
+                    // Find matching playlist for this parsha
+                    const match = playlists.find(p =>
+                        playlistMatchesParsha(p.title, parshaJson.parsha)
+                    )
+                    setMatchingPlaylist(match || null)
                 }
             } catch (err: any) {
                 console.error('Error loading parsha data:', err)
@@ -116,58 +132,50 @@ export default function ParshaAccordion() {
                 <div
                     className={cn(
                         "transition-all duration-300 ease-in-out overflow-hidden border-t border-gray-100",
-                        isOpen ? "max-h-[2000px] opacity-100" : "max-h-0 opacity-0 border-t-0"
+                        isOpen ? "max-h-[500px] opacity-100" : "max-h-0 opacity-0 border-t-0"
                     )}
                 >
                     <div className="p-4 md:p-5">
-                        {shiurim.length === 0 ? (
-                            <div className="text-center py-8">
-                                <p className="text-muted-foreground">
-                                    No shiurim found for Parshas {parshaData.parsha} yet.
-                                </p>
-                                <Link
-                                    href="/archive"
-                                    className="text-secondary hover:underline text-sm mt-2 inline-block"
-                                >
-                                    Browse all shiurim →
-                                </Link>
-                            </div>
+                        {matchingPlaylist ? (
+                            <a
+                                href={matchingPlaylist.playlistUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors border border-gray-100 group"
+                            >
+                                {matchingPlaylist.thumbnail && (
+                                    <img
+                                        src={matchingPlaylist.thumbnail}
+                                        alt={matchingPlaylist.title}
+                                        className="w-24 h-14 object-cover rounded hidden md:block"
+                                    />
+                                )}
+                                <div className="flex-1">
+                                    <h3 className="font-serif font-semibold text-primary group-hover:text-secondary transition-colors">
+                                        {matchingPlaylist.title}
+                                    </h3>
+                                    <p className="text-sm text-muted-foreground">
+                                        {matchingPlaylist.videoCount} videos on YouTube
+                                    </p>
+                                </div>
+                                <div className="p-3 bg-red-50 text-red-500 rounded-full group-hover:bg-red-500 group-hover:text-white transition-all transform group-hover:scale-110">
+                                    <Youtube className="w-5 h-5" />
+                                </div>
+                            </a>
                         ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {shiurim.map((shiur) => (
-                                    <div
-                                        key={shiur.id}
-                                        className="bg-gray-50 rounded-lg p-4 hover:bg-gray-100 transition-colors border border-gray-100"
-                                    >
-                                        <h3 className="font-serif font-semibold text-primary line-clamp-2 mb-2">
-                                            <Link href={getShiurUrl({ id: shiur.id, slug: shiur.slug ?? null })} className="hover:text-secondary transition-colors">
-                                                {shiur.title}
-                                            </Link>
-                                        </h3>
-                                        <div className="flex items-center flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground mb-3">
-                                            <div className="flex items-center gap-1">
-                                                <Calendar className="w-3 h-3" />
-                                                <span>{formatDate(shiur.pubDate)}</span>
-                                            </div>
-                                            {shiur.duration && (
-                                                <div className="flex items-center gap-1">
-                                                    <Clock className="w-3 h-3" />
-                                                    <span>{formatDuration(shiur.duration)}</span>
-                                                </div>
-                                            )}
-                                            <ViewCounter shiurId={shiur.id} showBreakdown={false} />
-                                        </div>
-                                        <div className="flex items-center justify-between">
-                                            <PlayButton shiur={shiur} />
-                                            <Link
-                                                href={getShiurUrl({ id: shiur.id, slug: shiur.slug ?? null })}
-                                                className="flex items-center gap-1 text-xs text-secondary hover:text-primary font-medium"
-                                            >
-                                                Details <Info className="w-3 h-3" />
-                                            </Link>
-                                        </div>
-                                    </div>
-                                ))}
+                            <div className="text-center py-8">
+                                <p className="text-lg text-muted-foreground mb-2">
+                                    We're sorry, we don't have any shiurim on this week's parsha yet.
+                                </p>
+                                <p className="text-sm text-muted-foreground mb-4">
+                                    Check back soon or explore our other Torah content!
+                                </p>
+                                <a
+                                    href="/playlists"
+                                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary/10 text-primary rounded-full font-medium hover:bg-primary/20 transition-colors"
+                                >
+                                    Browse All Playlists →
+                                </a>
                             </div>
                         )}
                     </div>
