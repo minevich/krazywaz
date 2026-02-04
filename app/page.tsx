@@ -4,6 +4,7 @@ import Header from '@/components/Header'
 import Footer from '@/components/Footer'
 import PlayButton from '@/components/PlayButton'
 import PlatformGrid from '@/components/PlatformGrid'
+import ParshaAccordion from '@/components/ParshaAccordion'
 import ViewCounter from '@/components/ViewCounter'
 import { Calendar, Clock, Info } from 'lucide-react'
 import { getDb, getD1Database } from '@/lib/db'
@@ -71,6 +72,11 @@ export default async function Home() {
             <p className="text-muted-foreground">Subscribe on your favorite platform</p>
           </div>
           <PlatformGrid />
+        </section>
+
+        {/* This Week's Parsha Section */}
+        <section className="mb-16">
+          <ParshaAccordion />
         </section>
 
         <section className="mb-16">
