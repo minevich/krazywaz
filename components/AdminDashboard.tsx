@@ -252,6 +252,21 @@ export default function AdminDashboard() {
               {syncing ? 'Syncing...' : 'Sync RSS'}
             </button>
             <button
+              onClick={() => {
+                // Clear any cached playlist data from localStorage
+                Object.keys(localStorage).forEach(key => {
+                  if (key.startsWith('playlist_')) {
+                    localStorage.removeItem(key)
+                  }
+                })
+                toast.success('Playlist cache cleared', 'Playlists will refresh on next load')
+              }}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Refresh Playlists
+            </button>
+            <button
               onClick={handleLogout}
               className="flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
             >
