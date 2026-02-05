@@ -190,14 +190,25 @@ export async function POST() {
                 const shiurId = videoIdToShiurId.get(video.id) || null
 
                 await db.insert(cachedVideos).values({
-                    id: video.id,
+                    id: `${playlistId}:${video.id}`, // Composite PK to allow duplicates across playlists
+                    videoId: video.id,               // Actual YouTube Video ID
                     playlistId: playlistId,
                     title: video.title,
                     thumbnail: video.thumbnail,
                     duration: video.duration,
                     position: video.position,
                     shiurId: shiurId
-                }).onConflictDoNothing()
+                }).onConflictDoUpdate({
+                    target: cachedVideos.id,
+                    set: {
+                        videoId: video.id,
+                        title: video.title,
+                        thumbnail: video.thumbnail,
+                        duration: video.duration,
+                        position: video.position,
+                        shiurId: shiurId
+                    }
+                })
                 totalVideoCount++
             }
         }

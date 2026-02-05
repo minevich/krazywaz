@@ -129,7 +129,8 @@ export const cachedPlaylists = sqliteTable('cached_playlists', {
 
 // Cached YouTube videos within playlists
 export const cachedVideos = sqliteTable('cached_videos', {
-    id: text('id').primaryKey(), // YouTube video ID
+    id: text('id').primaryKey(), // Composite: `${playlistId}:${videoId}`
+    videoId: text('video_id').notNull(), // Actual YouTube Video ID
     playlistId: text('playlist_id').notNull().references(() => cachedPlaylists.id, { onDelete: 'cascade' }),
     title: text('title').notNull(),
     thumbnail: text('thumbnail'),

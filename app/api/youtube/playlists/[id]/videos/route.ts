@@ -85,11 +85,12 @@ export async function GET(
             const videosWithLinks: VideoWithLinks[] = cached
                 .sort((a, b) => (a.position || 0) - (b.position || 0))
                 .map(video => {
-                    const data = videoIdToData.get(video.id)
+                    // Use videoId column for lookup (it stores the actual YT ID)
+                    const data = videoIdToData.get(video.videoId)
                     const links = data?.links
 
                     return {
-                        id: video.id,
+                        id: video.videoId, // Return actual YT ID
                         title: video.title,
                         thumbnail: video.thumbnail || '',
                         duration: video.duration || '',
@@ -97,7 +98,7 @@ export async function GET(
                         shiurId: video.shiurId || data?.shiurId || null,
                         slug: data?.slug || null,
                         platforms: {
-                            youtube: `https://www.youtube.com/watch?v=${video.id}`,
+                            youtube: `https://www.youtube.com/watch?v=${video.videoId}`, // Use actual YT ID
                             youtubeMusic: links?.youtubeMusic || null,
                             spotify: links?.spotify || null,
                             apple: links?.apple || null,

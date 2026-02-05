@@ -85,7 +85,7 @@ export async function GET(request: NextRequest) {
         const videosWithSlug: CachedVideoWithShiur[] = videos
             .sort((a, b) => (a.position || 0) - (b.position || 0))
             .map(v => ({
-                id: v.id,
+                id: v.videoId, // Use actual YT ID
                 title: v.title,
                 thumbnail: v.thumbnail,
                 duration: v.duration,
