@@ -65,20 +65,24 @@ export async function POST(request: NextRequest) {
             }
 
             for (const item of videosData.items) {
-                const videoId = item.contentDetails.videoId
+                // Use resourceId.videoId as the primary ID (more reliable than contentDetails.videoId)
+                const videoId = item.snippet?.resourceId?.videoId || item.contentDetails?.videoId
                 const shiurId = videoIdToShiurId.get(videoId) || null
 
-                await db.insert(cachedVideos).values({
-                    id: videoId,
-                    playlistId: playlist.id,
-                    title: item.snippet.title,
-                    thumbnail: item.snippet.thumbnails?.medium?.url || item.snippet.thumbnails?.default?.url || '',
-                    duration: '',
-                    position: item.snippet.position,
-                    shiurId: shiurId
-                }).onConflictDoNothing()
+                if (videoId) {
+                    await db.insert(cachedVideos).values({
+                        id: `${playlist.id}:${videoId}`, // Composite PK
+                        videoId: videoId,               // Actual YouTube ID
+                        playlistId: playlist.id,
+                        title: item.snippet.title,
+                        thumbnail: item.snippet.thumbnails?.medium?.url || item.snippet.thumbnails?.default?.url || '',
+                        duration: '',
+                        position: item.snippet.position,
+                        shiurId: shiurId
+                    }).onConflictDoNothing()
 
-                totalVideosAdded++
+                    totalVideosAdded++
+                }
             }
         }
 
