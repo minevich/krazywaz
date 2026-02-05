@@ -209,6 +209,11 @@ export default function PlaylistBookViewer() {
 
                 const playlists: Playlist[] = await response.json()
 
+                // Filter out unwanted playlists (e.g. "Rabbi Kraz's Shiurim" which is a duplicate/auto-generated)
+                const filteredPlaylists = playlists.filter(p =>
+                    !p.title.toLowerCase().includes("rabbi kraz's shiurim")
+                )
+
                 // Categorize playlists
                 const categoryMap: Record<string, Playlist[]> = {
                     'Bereishis': [],
@@ -219,7 +224,7 @@ export default function PlaylistBookViewer() {
                     'Misc': []
                 }
 
-                for (const playlist of playlists) {
+                for (const playlist of filteredPlaylists) {
                     const category = categorizePlaylist(playlist.title)
                     categoryMap[category].push(playlist)
                 }
