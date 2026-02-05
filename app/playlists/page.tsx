@@ -3,7 +3,6 @@
 import Header from '@/components/Header'
 import Footer from '@/components/Footer'
 import PlaylistBookViewer from '@/components/PlaylistBookViewer'
-import HolidaySelector from '@/components/HolidaySelector'
 
 export default function PlaylistsPage() {
   return (
@@ -19,9 +18,7 @@ export default function PlaylistsPage() {
           </p>
         </div>
 
-        <div className="mb-12">
-          <HolidaySelector />
-        </div>
+
 
         <PlaylistBookViewer />
       </main>
