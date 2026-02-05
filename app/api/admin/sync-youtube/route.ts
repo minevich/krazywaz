@@ -112,19 +112,34 @@ export async function POST() {
         const db = getDb(d1)
 
         // Step 1: Fetch all playlists from YouTube channel
-        const playlistsResponse = await fetch(
-            `https://www.googleapis.com/youtube/v3/playlists?part=snippet,contentDetails&channelId=${YOUTUBE_CHANNEL_ID}&maxResults=50&key=${YOUTUBE_API_KEY}`
-        )
+        // Step 1: Fetch all playlists from YouTube channel (with pagination)
+        let allPlaylistsItems: any[] = []
+        let nextToken: string | null = null
 
-        if (!playlistsResponse.ok) {
-            const errorData = await playlistsResponse.json().catch(() => ({}))
-            console.error('YouTube API error:', errorData)
-            throw new Error(`Failed to fetch playlists: ${playlistsResponse.status}`)
-        }
+        do {
+            let url = `https://www.googleapis.com/youtube/v3/playlists?part=snippet,contentDetails&channelId=${YOUTUBE_CHANNEL_ID}&maxResults=50&key=${YOUTUBE_API_KEY}`
+            if (nextToken) {
+                url += `&pageToken=${nextToken}`
+            }
 
-        const playlistsData = await playlistsResponse.json() as any
+            const playlistsResponse = await fetch(url)
 
-        if (!playlistsData.items || playlistsData.items.length === 0) {
+            if (!playlistsResponse.ok) {
+                const errorData = await playlistsResponse.json().catch(() => ({}))
+                console.error('YouTube API error:', errorData)
+                throw new Error(`Failed to fetch playlists: ${playlistsResponse.status}`)
+            }
+
+            const data = await playlistsResponse.json() as any
+            if (data.items) {
+                allPlaylistsItems = [...allPlaylistsItems, ...data.items]
+            }
+            nextToken = data.nextPageToken
+        } while (nextToken)
+
+        const playlistsData = { items: allPlaylistsItems }
+
+        if (playlistsData.items.length === 0) {
             return NextResponse.json({
                 success: true,
                 message: 'No playlists found',
@@ -159,17 +174,12 @@ export async function POST() {
         let totalVideoCount = 0
 
         // Step 4: Process playlists that either don't exist, have no videos, or are 'Misc' (to recheck category)
-        const playlistsNeedingSync = playlistsData.items.filter((p: any) =>
-            !existingPlaylistIds.has(p.id) ||
-            !playlistsWithVideos.has(p.id) ||
-            miscPlaylists.has(p.id)
-        )
-        const playlistsToProcess = playlistsNeedingSync.slice(0, 5)
-        for (const playlist of playlistsToProcess) {
+        // Step 4: Update metadata and categories for ALL playlists first
+        // This ensures all 67+ playlists get their correct category/title immediately
+        for (const playlist of playlistsData.items) {
             const playlistId = playlist.id
             const category = categorizePlaylist(playlist.snippet.title)
 
-            // Insert playlist (skip if already exists)
             await db.insert(cachedPlaylists).values({
                 id: playlistId,
                 title: playlist.snippet.title,
@@ -181,8 +191,27 @@ export async function POST() {
                 lastSynced: new Date()
             }).onConflictDoUpdate({
                 target: cachedPlaylists.id,
-                set: { category: category }
+                set: {
+                    category: category,
+                    title: playlist.snippet.title,
+                    thumbnail: playlist.snippet.thumbnails?.high?.url || playlist.snippet.thumbnails?.medium?.url || '',
+                    videoCount: playlist.contentDetails?.itemCount || 0,
+                    lastSynced: new Date()
+                }
             })
+        }
+
+        // Step 5: Fetch videos only for playlists that need them (new or no videos)
+        // We don't need to check 'Misc' here because we just updated categories above!
+        const playlistsNeedingVideos = playlistsData.items.filter((p: any) =>
+            !existingPlaylistIds.has(p.id) || !playlistsWithVideos.has(p.id)
+        )
+
+        const playlistsToProcess = playlistsNeedingVideos.slice(0, 5)
+
+        for (const playlist of playlistsToProcess) {
+            const playlistId = playlist.id
+            // Playlist already inserted above, just fetch videos
 
             // Fetch all videos from this playlist
             let nextPageToken: string | null = null
