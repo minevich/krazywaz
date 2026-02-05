@@ -59,11 +59,11 @@ const CHUMASH_PARSHAS: Record<string, string[]> = {
     ],
     'Devarim': [
         'Devarim', 'Deuteronomy', 'D\'varim',
-        'Vaetchanan', 'Va\'etchanan', 'Vaeschanan',
+        'Vaetchanan', 'Va\'etchanan', 'Vaeschanan', 'Va\'eschanan', 'V\'eschanan',
         'Eikev', 'Ekev',
         'Reeh', 'Re\'eh', 'R\'eih',
-        'Shoftim', 'Shofetim',
-        'Ki Teitzei', 'Ki Tetzei', 'Ki Tetze', 'Ki-Teitzei',
+        'Shoftim', 'Shofetim', 'Shophtim',
+        'Ki Teitzei', 'Ki Tetzei', 'Ki Tetze', 'Ki-Teitzei', 'Ki Seitzei', 'Ki-Seitzei',
         'Ki Tavo', 'Ki Savo', 'Ki-Tavo',
         'Nitzavim', 'Nitsavim',
         'Vayeilech', 'Vayelech',
@@ -73,7 +73,11 @@ const CHUMASH_PARSHAS: Record<string, string[]> = {
 }
 
 function categorizePlaylist(title: string): string {
+    // Normalize title: remove common prefixes and convert to lower case
     const lowerTitle = title.toLowerCase()
+        .replace(/^parshas\s+/, '')
+        .replace(/^parshat\s+/, '')
+        .replace(/^parsha\s+/, '')
 
     for (const [chumash, parshas] of Object.entries(CHUMASH_PARSHAS)) {
         for (const parsha of parshas) {
@@ -138,12 +142,15 @@ export async function POST() {
         const existingPlaylistIds = new Set(existingPlaylists.map(p => p.id))
         const existingVideos = await db.select().from(cachedVideos).all()
         const playlistsWithVideos = new Set(existingVideos.map(v => v.playlistId))
+        const miscPlaylists = new Set(existingPlaylists.filter(p => p.category === 'Misc').map(p => p.id))
 
         let totalVideoCount = 0
 
-        // Step 4: Process playlists that either don't exist OR have no videos yet
+        // Step 4: Process playlists that either don't exist, have no videos, or are 'Misc' (to recheck category)
         const playlistsNeedingSync = playlistsData.items.filter((p: any) =>
-            !existingPlaylistIds.has(p.id) || !playlistsWithVideos.has(p.id)
+            !existingPlaylistIds.has(p.id) ||
+            !playlistsWithVideos.has(p.id) ||
+            miscPlaylists.has(p.id)
         )
         const playlistsToProcess = playlistsNeedingSync.slice(0, 5)
         for (const playlist of playlistsToProcess) {
@@ -160,7 +167,10 @@ export async function POST() {
                 playlistUrl: `https://www.youtube.com/playlist?list=${playlistId}`,
                 category: category,
                 lastSynced: new Date()
-            }).onConflictDoNothing()
+            }).onConflictDoUpdate({
+                target: cachedPlaylists.id,
+                set: { category: category }
+            })
 
             // Fetch all videos from this playlist
             let nextPageToken: string | null = null
