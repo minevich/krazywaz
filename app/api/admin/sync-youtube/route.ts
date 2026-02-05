@@ -138,8 +138,9 @@ export async function POST() {
 
         let totalVideoCount = 0
 
-        // Step 4: Process each playlist
-        for (const playlist of playlistsData.items) {
+        // Step 4: Process each playlist (limit to 10 to stay within subrequest limit)
+        const playlistsToProcess = playlistsData.items.slice(0, 10)
+        for (const playlist of playlistsToProcess) {
             const playlistId = playlist.id
             const category = categorizePlaylist(playlist.snippet.title)
 
