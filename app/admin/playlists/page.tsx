@@ -55,7 +55,7 @@ export default function AdminPlaylistsPage() {
 
     const fetchPlaylists = async () => {
         try {
-            const response = await fetch('/api/admin/playlists')
+            const response = await fetch('/api/admin/playlists', { cache: 'no-store' })
             const data = await response.json() as PlaylistsResponse | Playlist[]
 
             if (Array.isArray(data)) {

@@ -129,14 +129,14 @@ export async function POST() {
             })
         }
 
-        // Step 5: Fetch videos for ALL playlists (to ensure updates are synced)
-        // We process the first 250 playlists from YouTube (covers user's ~67 playlists)
-        // This ensures we pick up new videos in existing playlists.
+        // Step 5: Fetch videos for ALL playlists
         const playlistsToProcess = playlistsData.items.slice(0, 250)
+        const errors: string[] = []
+        let processedPlaylists = 0
 
         for (const playlist of playlistsToProcess) {
             const playlistId = playlist.id
-            // Playlist already inserted above, just fetch videos
+            processedPlaylists++
 
             // Fetch all videos from this playlist
             let nextPageToken: string | null = null
@@ -156,7 +156,9 @@ export async function POST() {
 
                 const videosResponse = await fetch(videosUrl)
                 if (!videosResponse.ok) {
-                    console.error('Failed to fetch videos for playlist:', playlistId)
+                    const errTxt = await videosResponse.text()
+                    console.error(`Failed to fetch videos for playlist ${playlistId}: ${videosResponse.status}`, errTxt)
+                    errors.push(`Playlist ${playlistId} failed: ${videosResponse.status}`)
                     break
                 }
 
@@ -166,16 +168,18 @@ export async function POST() {
                     break
                 }
 
-                // Skip duration lookup to reduce API calls (stays within subrequest limit)
                 for (const item of videosData.items) {
-                    const videoId = item.contentDetails.videoId
-                    playlistVideos.push({
-                        id: videoId,
-                        title: item.snippet.title,
-                        thumbnail: item.snippet.thumbnails?.medium?.url || item.snippet.thumbnails?.default?.url || '',
-                        duration: '', // Duration omitted to reduce API calls
-                        position: item.snippet.position
-                    })
+                    // Use snippet.resourceId.videoId as primary, fallback to contentDetails
+                    const videoId = item.snippet?.resourceId?.videoId || item.contentDetails?.videoId
+                    if (videoId) {
+                        playlistVideos.push({
+                            id: videoId,
+                            title: item.snippet.title,
+                            thumbnail: item.snippet.thumbnails?.medium?.url || item.snippet.thumbnails?.default?.url || '',
+                            duration: '',
+                            position: item.snippet.position
+                        })
+                    }
                 }
 
                 nextPageToken = videosData.nextPageToken || null
@@ -200,13 +204,14 @@ export async function POST() {
 
         return NextResponse.json({
             success: true,
-            message: `Synced ${playlistsData.items.length} playlists and ${totalVideoCount} videos`,
+            message: `Synced ${playlistsData.items.length} playlists, processed ${processedPlaylists}, found ${totalVideoCount} videos. Errors: ${errors.length}`,
             playlistCount: playlistsData.items.length,
             videoCount: totalVideoCount,
+            errors: errors,
             syncedAt: new Date().toISOString()
         })
     } catch (error: any) {
         console.error('YouTube sync error:', error)
-        return NextResponse.json({ error: error.message }, { status: 500 })
+        return NextResponse.json({ error: error.message, stack: error.stack }, { status: 500 })
     }
 }
