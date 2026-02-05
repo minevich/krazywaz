@@ -183,39 +183,14 @@ export async function POST() {
                     break
                 }
 
-                // Get video IDs for duration lookup
-                const videoIds = videosData.items.map((item: any) => item.contentDetails.videoId).join(',')
-
-                // Fetch video details for duration
-                const detailsResponse = await fetch(
-                    `https://www.googleapis.com/youtube/v3/videos?part=contentDetails&id=${videoIds}&key=${YOUTUBE_API_KEY}`
-                )
-                const detailsData = await detailsResponse.json() as any
-                const durationMap = new Map<string, string>()
-
-                for (const video of detailsData.items || []) {
-                    const duration = video.contentDetails.duration
-                    const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/)
-                    const hours = parseInt(match?.[1] || '0')
-                    const minutes = parseInt(match?.[2] || '0')
-                    const seconds = parseInt(match?.[3] || '0')
-
-                    let durationStr = ''
-                    if (hours > 0) {
-                        durationStr = `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
-                    } else {
-                        durationStr = `${minutes}:${seconds.toString().padStart(2, '0')}`
-                    }
-                    durationMap.set(video.id, durationStr)
-                }
-
+                // Skip duration lookup to reduce API calls (stays within subrequest limit)
                 for (const item of videosData.items) {
                     const videoId = item.contentDetails.videoId
                     playlistVideos.push({
                         id: videoId,
                         title: item.snippet.title,
                         thumbnail: item.snippet.thumbnails?.medium?.url || item.snippet.thumbnails?.default?.url || '',
-                        duration: durationMap.get(videoId) || '',
+                        duration: '', // Duration omitted to reduce API calls
                         position: item.snippet.position
                     })
                 }
