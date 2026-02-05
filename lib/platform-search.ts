@@ -73,25 +73,41 @@ export async function searchApplePodcasts(title: string): Promise<SearchResult |
         // First try to get episodes from the specific podcast
         const feedUrl = `https://itunes.apple.com/lookup?id=${APPLE_PODCAST_ID}&entity=podcastEpisode&limit=200`
 
+        console.log('[Apple] Fetching:', feedUrl)
+
         const response = await fetch(feedUrl, {
             headers: { 'Accept': 'application/json' }
         })
 
         if (!response.ok) {
-            console.error('Apple Podcasts API error:', response.status)
+            console.error('[Apple] API error:', response.status, response.statusText)
             return null
         }
 
-        const data = await response.json() as { results?: any[] }
+        const text = await response.text()
+        console.log('[Apple] Response length:', text.length)
+
+        let data: { results?: any[] }
+        try {
+            data = JSON.parse(text)
+        } catch (e) {
+            console.error('[Apple] JSON parse error:', e)
+            return null
+        }
+
+        console.log('[Apple] Results count:', data.results?.length || 0)
 
         if (!data.results || data.results.length === 0) {
+            console.log('[Apple] No results found')
             return null
         }
 
         // Skip first result (it's the podcast itself, not an episode)
         const episodes = data.results.slice(1)
+        console.log('[Apple] Episodes count:', episodes.length)
 
         const normalizedSearch = normalizeTitle(title)
+        console.log('[Apple] Searching for:', normalizedSearch)
 
         // Find best matching episode
         let bestMatch: SearchResult | null = null
@@ -121,9 +137,10 @@ export async function searchApplePodcasts(title: string): Promise<SearchResult |
             }
         }
 
+        console.log('[Apple] Best match:', bestMatch?.title, 'similarity:', bestSimilarity)
         return bestMatch
     } catch (error) {
-        console.error('Error searching Apple Podcasts:', error)
+        console.error('[Apple] Error:', error)
         return null
     }
 }
