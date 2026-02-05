@@ -228,16 +228,115 @@ export async function searchSpotify(title: string): Promise<SearchResult | null>
 }
 
 /**
+ * Search YouTube for a video by title on the channel
+ * Returns both YouTube and YouTube Music URLs (same video ID)
+ */
+export async function searchYouTube(title: string): Promise<{
+    youtube: SearchResult | null
+    youtubeMusic: SearchResult | null
+}> {
+    const { YOUTUBE_API_KEY, YOUTUBE_CHANNEL_ID } = await import('./youtube')
+
+    if (!YOUTUBE_API_KEY) {
+        console.log('YouTube API key not configured')
+        return { youtube: null, youtubeMusic: null }
+    }
+
+    try {
+        // Search for videos on the channel by title
+        const searchQuery = encodeURIComponent(title)
+        const response = await fetch(
+            `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${YOUTUBE_CHANNEL_ID}&q=${searchQuery}&type=video&maxResults=10&key=${YOUTUBE_API_KEY}`
+        )
+
+        if (!response.ok) {
+            console.error('YouTube API error:', response.status)
+            return { youtube: null, youtubeMusic: null }
+        }
+
+        const data = await response.json() as {
+            items?: Array<{
+                id: { videoId: string }
+                snippet: { title: string }
+            }>
+        }
+
+        if (!data.items || data.items.length === 0) {
+            return { youtube: null, youtubeMusic: null }
+        }
+
+        const normalizedSearch = normalizeTitle(title)
+
+        // Find best matching video
+        let bestMatch: { videoId: string; title: string; similarity: number } | null = null
+        let bestSimilarity = 0
+
+        for (const item of data.items) {
+            const videoTitle = item.snippet.title || ''
+            const normalizedVideo = normalizeTitle(videoTitle)
+
+            const similarity = calculateSimilarity(normalizedSearch, normalizedVideo)
+
+            const containsMatch = normalizedVideo.includes(normalizedSearch) ||
+                normalizedSearch.includes(normalizedVideo)
+
+            const adjustedSimilarity = containsMatch ? Math.max(similarity, 0.85) : similarity
+
+            if (adjustedSimilarity > bestSimilarity && adjustedSimilarity >= 0.6) {
+                bestSimilarity = adjustedSimilarity
+                bestMatch = {
+                    videoId: item.id.videoId,
+                    title: videoTitle,
+                    similarity: adjustedSimilarity
+                }
+            }
+        }
+
+        if (!bestMatch) {
+            return { youtube: null, youtubeMusic: null }
+        }
+
+        // Return both YouTube and YouTube Music URLs (same video ID)
+        return {
+            youtube: {
+                platform: 'apple', // Type hack - we'll handle this in the route
+                title: bestMatch.title,
+                url: `https://www.youtube.com/watch?v=${bestMatch.videoId}`,
+                similarity: bestMatch.similarity
+            },
+            youtubeMusic: {
+                platform: 'apple', // Type hack
+                title: bestMatch.title,
+                url: `https://music.youtube.com/watch?v=${bestMatch.videoId}`,
+                similarity: bestMatch.similarity
+            }
+        }
+    } catch (error) {
+        console.error('Error searching YouTube:', error)
+        return { youtube: null, youtubeMusic: null }
+    }
+}
+
+/**
  * Search all platforms for a shiur by title
  */
 export async function searchAllPlatforms(title: string): Promise<{
     apple: SearchResult | null
     spotify: SearchResult | null
+    youtube: SearchResult | null
+    youtubeMusic: SearchResult | null
 }> {
-    const [apple, spotify] = await Promise.all([
+    const [apple, spotify, ytResults] = await Promise.all([
         searchApplePodcasts(title),
-        searchSpotify(title)
+        searchSpotify(title),
+        searchYouTube(title)
     ])
 
-    return { apple, spotify }
+    return {
+        apple,
+        spotify,
+        youtube: ytResults.youtube,
+        youtubeMusic: ytResults.youtubeMusic
+    }
 }
+

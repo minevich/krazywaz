@@ -18,6 +18,8 @@ interface AutoFillResult {
     title: string
     appleMatch: { url: string; similarity: number } | null
     spotifyMatch: { url: string; similarity: number } | null
+    youtubeMatch: { url: string; similarity: number } | null
+    youtubeMusicMatch: { url: string; similarity: number } | null
     updated: boolean
     error?: string
 }
@@ -77,8 +79,8 @@ export async function POST(request: Request) {
 
             const existingLink = linksByShiurId.get(shiur.id)
 
-            // Skip if already has both links and not overwriting
-            if (!overwrite && existingLink?.apple && existingLink?.spotify) {
+            // Skip if already has all links and not overwriting
+            if (!overwrite && existingLink?.apple && existingLink?.spotify && existingLink?.youtube && existingLink?.youtubeMusic) {
                 skipped++
                 continue
             }
@@ -100,11 +102,19 @@ export async function POST(request: Request) {
                         url: matches.spotify.url,
                         similarity: matches.spotify.similarity
                     } : null,
+                    youtubeMatch: matches.youtube ? {
+                        url: matches.youtube.url,
+                        similarity: matches.youtube.similarity
+                    } : null,
+                    youtubeMusicMatch: matches.youtubeMusic ? {
+                        url: matches.youtubeMusic.url,
+                        similarity: matches.youtubeMusic.similarity
+                    } : null,
                     updated: false
                 }
 
                 // Determine what to update
-                const updates: { apple?: string; spotify?: string; updatedAt?: Date } = {}
+                const updates: { apple?: string; spotify?: string; youtube?: string; youtubeMusic?: string; updatedAt?: Date } = {}
 
                 if (matches.apple && matches.apple.similarity >= minSimilarity) {
                     if (overwrite || !existingLink?.apple) {
@@ -115,6 +125,18 @@ export async function POST(request: Request) {
                 if (matches.spotify && matches.spotify.similarity >= minSimilarity) {
                     if (overwrite || !existingLink?.spotify) {
                         updates.spotify = matches.spotify.url
+                    }
+                }
+
+                if (matches.youtube && matches.youtube.similarity >= minSimilarity) {
+                    if (overwrite || !existingLink?.youtube) {
+                        updates.youtube = matches.youtube.url
+                    }
+                }
+
+                if (matches.youtubeMusic && matches.youtubeMusic.similarity >= minSimilarity) {
+                    if (overwrite || !existingLink?.youtubeMusic) {
+                        updates.youtubeMusic = matches.youtubeMusic.url
                     }
                 }
 
@@ -150,6 +172,8 @@ export async function POST(request: Request) {
                     title: shiur.title,
                     appleMatch: null,
                     spotifyMatch: null,
+                    youtubeMatch: null,
+                    youtubeMusicMatch: null,
                     updated: false,
                     error: error.message
                 })
