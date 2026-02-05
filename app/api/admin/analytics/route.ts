@@ -12,11 +12,12 @@ export async function GET(request: NextRequest) {
 
         const db = getDb(d1)
 
-        // Get all shiurim with their analytics
+        // Get all shiurim with their analytics (if any)
+        // Query from shiurim table to ensure ALL shiurim are included
         const result = await db
             .select({
-                id: analyticsCache.id,
-                shiurId: analyticsCache.shiurId,
+                id: shiurim.id,
+                shiurId: shiurim.id,
                 title: shiurim.title,
                 pubDate: shiurim.pubDate,
                 websiteViews: analyticsCache.websiteViews,
@@ -28,9 +29,9 @@ export async function GET(request: NextRequest) {
                 totalViews: analyticsCache.totalViews,
                 lastYoutubeSync: analyticsCache.lastYoutubeSync,
             })
-            .from(analyticsCache)
-            .leftJoin(shiurim, sql`${analyticsCache.shiurId} = ${shiurim.id}`)
-            .orderBy(desc(analyticsCache.totalViews))
+            .from(shiurim)
+            .leftJoin(analyticsCache, sql`${shiurim.id} = ${analyticsCache.shiurId}`)
+            .orderBy(desc(shiurim.pubDate))
             .all()
 
         // Calculate summary
