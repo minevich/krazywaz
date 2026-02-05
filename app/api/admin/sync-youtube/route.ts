@@ -132,19 +132,21 @@ export async function POST() {
             }
         }
 
-        // Step 3: Clear existing cache
-        await db.delete(cachedVideos)
-        await db.delete(cachedPlaylists)
+        // Step 3: Don't clear cache - sync incrementally
+        // Get already synced playlists so we skip them
+        const existingPlaylists = await db.select().from(cachedPlaylists).all()
+        const existingPlaylistIds = new Set(existingPlaylists.map(p => p.id))
 
         let totalVideoCount = 0
 
-        // Step 4: Process each playlist (limit to 10 to stay within subrequest limit)
-        const playlistsToProcess = playlistsData.items.slice(0, 10)
+        // Step 4: Process only NEW playlists (limit to 10 to stay within subrequest limit)
+        const newPlaylists = playlistsData.items.filter((p: any) => !existingPlaylistIds.has(p.id))
+        const playlistsToProcess = newPlaylists.slice(0, 10)
         for (const playlist of playlistsToProcess) {
             const playlistId = playlist.id
             const category = categorizePlaylist(playlist.snippet.title)
 
-            // Insert playlist
+            // Insert playlist (skip if already exists)
             await db.insert(cachedPlaylists).values({
                 id: playlistId,
                 title: playlist.snippet.title,
@@ -154,7 +156,7 @@ export async function POST() {
                 playlistUrl: `https://www.youtube.com/playlist?list=${playlistId}`,
                 category: category,
                 lastSynced: new Date()
-            })
+            }).onConflictDoNothing()
 
             // Fetch all videos from this playlist
             let nextPageToken: string | null = null
