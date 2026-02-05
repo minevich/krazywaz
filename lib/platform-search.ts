@@ -244,6 +244,108 @@ export async function searchSpotify(title: string): Promise<SearchResult | null>
     }
 }
 
+// Cache for channel videos to avoid refetching
+let channelVideosCache: Array<{ videoId: string; title: string }> | null = null
+let cacheTimestamp = 0
+const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+
+/**
+ * Fetch all videos from the YouTube channel
+ * Uses playlistItems endpoint which is much cheaper (1 unit vs 100 for search)
+ */
+async function fetchAllChannelVideos(): Promise<Array<{ videoId: string; title: string }>> {
+    // Return cached if fresh
+    if (channelVideosCache && Date.now() - cacheTimestamp < CACHE_TTL) {
+        return channelVideosCache
+    }
+
+    const { YOUTUBE_API_KEY, YOUTUBE_CHANNEL_ID } = await import('./youtube')
+
+    if (!YOUTUBE_API_KEY) {
+        console.log('[YouTube] API key not configured')
+        return []
+    }
+
+    const videos: Array<{ videoId: string; title: string }> = []
+
+    try {
+        // First, get the uploads playlist ID from the channel
+        const channelResponse = await fetch(
+            `https://www.googleapis.com/youtube/v3/channels?part=contentDetails&id=${YOUTUBE_CHANNEL_ID}&key=${YOUTUBE_API_KEY}`
+        )
+
+        if (!channelResponse.ok) {
+            console.error('[YouTube] Channel API error:', channelResponse.status)
+            return []
+        }
+
+        const channelData = await channelResponse.json() as {
+            items?: Array<{ contentDetails?: { relatedPlaylists?: { uploads?: string } } }>
+        }
+
+        const uploadsPlaylistId = channelData.items?.[0]?.contentDetails?.relatedPlaylists?.uploads
+        if (!uploadsPlaylistId) {
+            console.error('[YouTube] Could not find uploads playlist')
+            return []
+        }
+
+        console.log('[YouTube] Fetching videos from uploads playlist:', uploadsPlaylistId)
+
+        // Fetch all videos from the uploads playlist (paginated)
+        let nextPageToken: string | undefined
+        let totalFetched = 0
+
+        do {
+            const pageUrl = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${uploadsPlaylistId}&maxResults=50&key=${YOUTUBE_API_KEY}${nextPageToken ? `&pageToken=${nextPageToken}` : ''}`
+
+            const response = await fetch(pageUrl)
+
+            if (!response.ok) {
+                console.error('[YouTube] Playlist API error:', response.status)
+                break
+            }
+
+            const data = await response.json() as {
+                items?: Array<{
+                    snippet?: {
+                        resourceId?: { videoId?: string }
+                        title?: string
+                    }
+                }>
+                nextPageToken?: string
+            }
+
+            if (data.items) {
+                for (const item of data.items) {
+                    const videoId = item.snippet?.resourceId?.videoId
+                    const title = item.snippet?.title
+                    if (videoId && title) {
+                        videos.push({ videoId, title })
+                    }
+                }
+                totalFetched += data.items.length
+            }
+
+            nextPageToken = data.nextPageToken
+
+            // Safety limit - max 500 videos
+            if (totalFetched >= 500) break
+
+        } while (nextPageToken)
+
+        console.log('[YouTube] Fetched', videos.length, 'videos from channel')
+
+        // Cache the results
+        channelVideosCache = videos
+        cacheTimestamp = Date.now()
+
+        return videos
+    } catch (error) {
+        console.error('[YouTube] Error fetching channel videos:', error)
+        return []
+    }
+}
+
 /**
  * Search YouTube for a video by title on the channel
  * Returns both YouTube and YouTube Music URLs (same video ID)
@@ -252,33 +354,11 @@ export async function searchYouTube(title: string): Promise<{
     youtube: SearchResult | null
     youtubeMusic: SearchResult | null
 }> {
-    const { YOUTUBE_API_KEY, YOUTUBE_CHANNEL_ID } = await import('./youtube')
-
-    if (!YOUTUBE_API_KEY) {
-        console.log('YouTube API key not configured')
-        return { youtube: null, youtubeMusic: null }
-    }
-
     try {
-        // Search for videos on the channel by title
-        const searchQuery = encodeURIComponent(title)
-        const response = await fetch(
-            `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${YOUTUBE_CHANNEL_ID}&q=${searchQuery}&type=video&maxResults=10&key=${YOUTUBE_API_KEY}`
-        )
+        // Get all channel videos (cached)
+        const allVideos = await fetchAllChannelVideos()
 
-        if (!response.ok) {
-            console.error('YouTube API error:', response.status)
-            return { youtube: null, youtubeMusic: null }
-        }
-
-        const data = await response.json() as {
-            items?: Array<{
-                id: { videoId: string }
-                snippet: { title: string }
-            }>
-        }
-
-        if (!data.items || data.items.length === 0) {
+        if (allVideos.length === 0) {
             return { youtube: null, youtubeMusic: null }
         }
 
@@ -288,9 +368,8 @@ export async function searchYouTube(title: string): Promise<{
         let bestMatch: { videoId: string; title: string; similarity: number } | null = null
         let bestSimilarity = 0
 
-        for (const item of data.items) {
-            const videoTitle = item.snippet.title || ''
-            const normalizedVideo = normalizeTitle(videoTitle)
+        for (const video of allVideos) {
+            const normalizedVideo = normalizeTitle(video.title)
 
             const similarity = calculateSimilarity(normalizedSearch, normalizedVideo)
 
@@ -302,8 +381,8 @@ export async function searchYouTube(title: string): Promise<{
             if (adjustedSimilarity > bestSimilarity && adjustedSimilarity >= 0.6) {
                 bestSimilarity = adjustedSimilarity
                 bestMatch = {
-                    videoId: item.id.videoId,
-                    title: videoTitle,
+                    videoId: video.videoId,
+                    title: video.title,
                     similarity: adjustedSimilarity
                 }
             }
@@ -329,7 +408,7 @@ export async function searchYouTube(title: string): Promise<{
             }
         }
     } catch (error) {
-        console.error('Error searching YouTube:', error)
+        console.error('[YouTube] Error:', error)
         return { youtube: null, youtubeMusic: null }
     }
 }
