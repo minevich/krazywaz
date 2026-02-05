@@ -14,7 +14,6 @@ export async function GET() {
         // Fetch categories sorted by order
         const categories = await db.select()
             .from(systemCategories)
-            .where(asc(systemCategories.order)) // Typo: where accepts condition, orderBy accepts ordering
             .orderBy(asc(systemCategories.order))
             .all()
 

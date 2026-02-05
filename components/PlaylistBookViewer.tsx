@@ -127,9 +127,11 @@ export default function PlaylistBookViewer() {
                     fetch('/api/youtube/playlists') // This now returns merged Manual + Synced
                 ])
 
+                if (!catsResponse.ok) throw new Error('Failed to fetch categories')
                 if (!playlistsResponse.ok) throw new Error('Failed to fetch playlists')
 
-                const systemCats: { name: string, rules: { name: string, keywords: string[] }[] }[] = await catsResponse.json()
+                const systemCatsData = await catsResponse.json()
+                const systemCats: { name: string, rules: { name: string, keywords: string[] }[] }[] = Array.isArray(systemCatsData) ? systemCatsData : []
                 const playlists: Playlist[] = await playlistsResponse.json()
 
                 // Filter out unwanted playlists
