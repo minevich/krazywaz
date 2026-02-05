@@ -19,7 +19,7 @@ export async function POST(
         const { id } = await params
         const playlistId = id
 
-        const body = await request.json()
+        const body = await request.json() as { shiurIds?: string[] }
         const { shiurIds } = body // Array of shiur IDs to add
 
         if (!shiurIds || !Array.isArray(shiurIds) || shiurIds.length === 0) {
@@ -77,7 +77,7 @@ export async function PUT(
         const { id } = await params
         const playlistId = id
 
-        const body = await request.json()
+        const body = await request.json() as { items?: { id: string, position: number }[] }
         const { items } = body // Array of { id: string, position: number }
 
         if (!items || !Array.isArray(items)) {
