@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Plus, Edit, Trash2, RefreshCw, LogOut, FileText, Search, Filter, X, Wand2, Download, Upload } from 'lucide-react'
+import { Plus, Edit, Trash2, RefreshCw, LogOut, FileText, Search, Filter, X, Wand2, Download, Upload, ListMusic } from 'lucide-react'
 import ShiurForm from './ShiurForm'
 import { useToast } from './Toast'
 import AdminStats from './AdminStats'
@@ -256,39 +256,13 @@ export default function AdminDashboard() {
               <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
               {syncing ? 'Syncing...' : 'Sync RSS'}
             </button>
-            <button
-              onClick={async () => {
-                setSyncingYouTube(true)
-                try {
-                  const response = await fetch('/api/admin/sync-youtube', {
-                    method: 'POST'
-                  })
-                  const data = await response.json() as {
-                    success?: boolean;
-                    error?: string;
-                    playlistCount?: number;
-                    videoCount?: number;
-                  }
-                  if (data.success) {
-                    toast.success(
-                      'YouTube data synced!',
-                      `${data.playlistCount} playlists, ${data.videoCount} videos`
-                    )
-                  } else {
-                    toast.error('Sync failed', data.error || 'Unknown error')
-                  }
-                } catch (error: any) {
-                  toast.error('Sync failed', error.message)
-                } finally {
-                  setSyncingYouTube(false)
-                }
-              }}
-              disabled={syncingYouTube}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+            <Link
+              href="/admin/playlists"
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
-              <RefreshCw className={`w-4 h-4 ${syncingYouTube ? 'animate-spin' : ''}`} />
-              {syncingYouTube ? 'Syncing...' : 'Sync YouTube'}
-            </button>
+              <ListMusic className="w-4 h-4" />
+              Manage Playlists
+            </Link>
             <button
               onClick={async () => {
                 setAutoFilling(true)

@@ -143,3 +143,38 @@ export type NewCachedPlaylist = typeof cachedPlaylists.$inferInsert
 
 export type CachedVideo = typeof cachedVideos.$inferSelect
 export type NewCachedVideo = typeof cachedVideos.$inferInsert
+
+// Custom Manual Playlists
+export const customPlaylists = sqliteTable('custom_playlists', {
+    id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+    title: text('title').notNull(),
+    description: text('description'),
+    category: text('category'), // e.g. "Holidays", "Series", etc.
+    createdAt: integer('created_at', { mode: 'timestamp' })
+        .notNull()
+        .$defaultFn(() => new Date()),
+    updatedAt: integer('updated_at', { mode: 'timestamp' })
+        .notNull()
+        .$defaultFn(() => new Date())
+        .$onUpdate(() => new Date()),
+})
+
+export const customPlaylistItems = sqliteTable('custom_playlist_items', {
+    id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+    playlistId: text('playlist_id')
+        .notNull()
+        .references(() => customPlaylists.id, { onDelete: 'cascade' }),
+    shiurId: text('shiur_id')
+        .notNull()
+        .references(() => shiurim.id, { onDelete: 'cascade' }),
+    position: integer('position').notNull().default(0),
+    addedAt: integer('added_at', { mode: 'timestamp' })
+        .notNull()
+        .$defaultFn(() => new Date()),
+})
+
+export type CustomPlaylist = typeof customPlaylists.$inferSelect
+export type NewCustomPlaylist = typeof customPlaylists.$inferInsert
+
+export type CustomPlaylistItem = typeof customPlaylistItems.$inferSelect
+export type NewCustomPlaylistItem = typeof customPlaylistItems.$inferInsert
