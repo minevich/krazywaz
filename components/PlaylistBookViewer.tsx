@@ -70,6 +70,18 @@ const CHUMASH_PARSHAS: Record<string, string[]> = {
         'Vayeilech', 'Vayelech',
         'Haazinu', 'Ha\'azinu',
         'Vezot Haberakhah', 'V\'zot Habracha', 'Zos Habracha'
+    ],
+    'Holidays': [
+        'Rosh Hashanah', 'Rosh Hashana',
+        'Yom Kippur',
+        'Sukkos', 'Sukkot',
+        'Chanukah', 'Hanukkah',
+        'Purim',
+        'Pesach', 'Passover',
+        'Shavuos', 'Shavuot',
+        'Tisha B\'Av', 'Tisha Bav', 'Three Weeks',
+        'Rosh Chodesh',
+        'Lag BaOmer'
     ]
 }
 
@@ -109,6 +121,9 @@ interface CategoryData {
 
 function categorizePlaylist(title: string): string {
     const lowerTitle = title.toLowerCase()
+        .replace(/^parshas\s+/, '')
+        .replace(/^parshat\s+/, '')
+        .replace(/^parsha\s+/, '')
 
     for (const [chumash, parshas] of Object.entries(CHUMASH_PARSHAS)) {
         for (const parsha of parshas) {
@@ -221,6 +236,7 @@ export default function PlaylistBookViewer() {
                     'Vayikra': [],
                     'Bamidbar': [],
                     'Devarim': [],
+                    'Holidays': [],
                     'Misc': []
                 }
 
