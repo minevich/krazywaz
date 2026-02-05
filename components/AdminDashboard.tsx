@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Plus, Edit, Trash2, RefreshCw, LogOut, FileText, Search, Filter, X, Wand2 } from 'lucide-react'
+import { Plus, Edit, Trash2, RefreshCw, LogOut, FileText, Search, Filter, X, Wand2, Download, Upload } from 'lucide-react'
 import ShiurForm from './ShiurForm'
 import { useToast } from './Toast'
 import AdminStats from './AdminStats'
@@ -40,6 +40,9 @@ export default function AdminDashboard() {
   const [editingShiur, setEditingShiur] = useState<Shiur | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [autoFilling, setAutoFilling] = useState(false)
+  const [showBulkImport, setShowBulkImport] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const bulkFileRef = React.useRef<HTMLInputElement>(null)
   const router = useRouter()
   const toast = useToast()
 
@@ -304,6 +307,21 @@ export default function AdminDashboard() {
             >
               <Wand2 className={`w-4 h-4 ${autoFilling ? 'animate-pulse' : ''}`} />
               {autoFilling ? 'Filling...' : 'Auto-Fill Links'}
+            </button>
+            <a
+              href="/api/admin/bulk-links"
+              download="shiurim-links.csv"
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+            >
+              <Download className="w-4 h-4" />
+              Export CSV
+            </a>
+            <button
+              onClick={() => setShowBulkImport(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
+            >
+              <Upload className="w-4 h-4" />
+              Import Links
             </button>
             <button
               onClick={handleLogout}
@@ -576,6 +594,144 @@ export default function AdminDashboard() {
           </div>
         </div>
       </div>
+
+      {/* Bulk Import Modal */}
+      {showBulkImport && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold">Import Platform Links</h2>
+              <button onClick={() => setShowBulkImport(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="bg-blue-50 rounded-lg p-4 text-sm text-blue-800">
+                <p className="font-medium mb-2">📋 Instructions:</p>
+                <ol className="list-decimal ml-4 space-y-1">
+                  <li>Click "Export CSV" to download all shiurim with current links</li>
+                  <li>Open the CSV in Excel/Google Sheets</li>
+                  <li>Fill in the platform URLs in the appropriate columns</li>
+                  <li>Save as CSV and upload below</li>
+                </ol>
+                <p className="mt-2 text-xs">Columns: title, youtube, youtubeMusic, spotify, apple, amazon, pocket, castbox</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Upload CSV File</label>
+                <input
+                  ref={bulkFileRef}
+                  type="file"
+                  accept=".csv"
+                  disabled={importing}
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0]
+                    if (!file) return
+
+                    setImporting(true)
+                    try {
+                      const text = await file.text()
+                      const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
+
+                      // Parse header
+                      const parseCSVLine = (line: string): string[] => {
+                        const result: string[] = []
+                        let current = ''
+                        let inQuotes = false
+                        for (let i = 0; i < line.length; i++) {
+                          const char = line[i]
+                          if (char === '"') inQuotes = !inQuotes
+                          else if (char === ',' && !inQuotes) {
+                            result.push(current.replace(/^"|"$/g, '').trim())
+                            current = ''
+                          } else current += char
+                        }
+                        result.push(current.replace(/^"|"$/g, '').trim())
+                        return result
+                      }
+
+                      const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase())
+                      const titleIdx = headers.indexOf('title')
+                      if (titleIdx === -1) throw new Error('CSV must have a "title" column')
+
+                      const rows = []
+                      for (let i = 1; i < lines.length; i++) {
+                        const cols = parseCSVLine(lines[i])
+                        const row: Record<string, string> = { title: cols[titleIdx] || '' }
+
+                        const platforms = ['youtube', 'youtubemusic', 'spotify', 'apple', 'amazon', 'pocket', 'castbox']
+                        for (const p of platforms) {
+                          const idx = headers.indexOf(p)
+                          if (idx !== -1 && cols[idx]) {
+                            row[p === 'youtubemusic' ? 'youtubeMusic' : p] = cols[idx]
+                          }
+                        }
+                        if (row.title) rows.push(row)
+                      }
+
+                      const response = await fetch('/api/admin/bulk-links', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ rows })
+                      })
+
+                      const result = await response.json() as { success?: boolean; summary?: { updated: number; created: number; notFound: number }; error?: string }
+
+                      if (result.success) {
+                        toast.success(
+                          'Import complete!',
+                          `Updated: ${result.summary?.updated}, Created: ${result.summary?.created}, Not found: ${result.summary?.notFound}`
+                        )
+                        setShowBulkImport(false)
+                        fetchShiurim()
+                      } else {
+                        toast.error('Import failed', result.error || 'Unknown error')
+                      }
+                    } catch (error: any) {
+                      toast.error('Import failed', error.message)
+                    } finally {
+                      setImporting(false)
+                      if (bulkFileRef.current) bulkFileRef.current.value = ''
+                    }
+                  }}
+                  className="w-full px-3 py-2 border rounded-lg file:mr-4 file:py-1 file:px-4 file:rounded file:border-0 file:bg-primary file:text-white file:cursor-pointer"
+                />
+              </div>
+
+              {importing && (
+                <div className="flex items-center gap-2 text-primary">
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  Importing...
+                </div>
+              )}
+
+              <div className="border-t pt-4 mt-4">
+                <p className="text-sm font-medium text-gray-700 mb-2">Quick Actions:</p>
+                <button
+                  onClick={async () => {
+                    try {
+                      const response = await fetch('/api/admin/fill-24six', { method: 'POST' })
+                      const data = await response.json() as { success?: boolean; updated?: number; created?: number; error?: string }
+                      if (data.success) {
+                        toast.success('24Six set for all shiurim!', `Updated: ${data.updated}, Created: ${data.created}`)
+                        fetchShiurim()
+                      } else {
+                        toast.error('Failed', data.error || 'Unknown error')
+                      }
+                    } catch (error: any) {
+                      toast.error('Failed', error.message)
+                    }
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                >
+                  Fill 24Six for All Shiurim
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div >
   )
 }
