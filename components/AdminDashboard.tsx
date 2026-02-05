@@ -40,6 +40,7 @@ export default function AdminDashboard() {
   const [editingShiur, setEditingShiur] = useState<Shiur | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [autoFilling, setAutoFilling] = useState(false)
+  const [syncingYouTube, setSyncingYouTube] = useState(false)
   const [showBulkImport, setShowBulkImport] = useState(false)
   const [importing, setImporting] = useState(false)
   const bulkFileRef = React.useRef<HTMLInputElement>(null)
@@ -256,19 +257,37 @@ export default function AdminDashboard() {
               {syncing ? 'Syncing...' : 'Sync RSS'}
             </button>
             <button
-              onClick={() => {
-                // Clear any cached playlist data from localStorage
-                Object.keys(localStorage).forEach(key => {
-                  if (key.startsWith('playlist_')) {
-                    localStorage.removeItem(key)
+              onClick={async () => {
+                setSyncingYouTube(true)
+                try {
+                  const response = await fetch('/api/admin/sync-youtube', {
+                    method: 'POST'
+                  })
+                  const data = await response.json() as {
+                    success?: boolean;
+                    error?: string;
+                    playlistCount?: number;
+                    videoCount?: number;
                   }
-                })
-                toast.success('Playlist cache cleared', 'Playlists will refresh on next load')
+                  if (data.success) {
+                    toast.success(
+                      'YouTube data synced!',
+                      `${data.playlistCount} playlists, ${data.videoCount} videos`
+                    )
+                  } else {
+                    toast.error('Sync failed', data.error || 'Unknown error')
+                  }
+                } catch (error: any) {
+                  toast.error('Sync failed', error.message)
+                } finally {
+                  setSyncingYouTube(false)
+                }
               }}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              disabled={syncingYouTube}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
             >
-              <RefreshCw className="w-4 h-4" />
-              Refresh Playlists
+              <RefreshCw className={`w-4 h-4 ${syncingYouTube ? 'animate-spin' : ''}`} />
+              {syncingYouTube ? 'Syncing...' : 'Sync YouTube'}
             </button>
             <button
               onClick={async () => {

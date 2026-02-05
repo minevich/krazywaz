@@ -1,16 +1,18 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ChevronDown, BookOpen, Loader2, Youtube } from 'lucide-react'
+import { ChevronDown, BookOpen, Loader2, Youtube, ExternalLink } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import Link from 'next/link'
 
-interface Playlist {
+interface ParshaVideo {
     id: string
     title: string
-    description: string
-    thumbnail: string
-    videoCount: number
-    playlistUrl: string
+    thumbnail: string | null
+    duration: string | null
+    position: number | null
+    shiurId: string | null
+    slug: string | null
 }
 
 interface ParshaData {
@@ -19,57 +21,32 @@ interface ParshaData {
     shabbosDate: string
 }
 
-// Normalize parsha name for matching (handles spelling variations)
-function normalizeForMatch(name: string): string {
-    return name
-        .toLowerCase()
-        .replace(/['-]/g, '')
-        .replace(/parashat?\s*/i, '')
-        .replace(/^bo$/, 'bo ') // Prevent 'bo' from matching 'bamidbar'
-        .trim()
-}
-
-// Check if a playlist title matches the parsha
-function playlistMatchesParsha(playlistTitle: string, parshaName: string): boolean {
-    const normalizedPlaylist = normalizeForMatch(playlistTitle)
-    const normalizedParsha = normalizeForMatch(parshaName)
-
-    // Check if the parsha name appears in the playlist title
-    return normalizedPlaylist.includes(normalizedParsha) ||
-        normalizedParsha.includes(normalizedPlaylist)
+interface ParshaVideosResponse {
+    parsha: string
+    playlistId: string | null
+    playlistTitle: string | null
+    playlistUrl: string | null
+    videos: ParshaVideo[]
 }
 
 export default function ParshaAccordion() {
     const [isOpen, setIsOpen] = useState(false)
     const [parshaData, setParshaData] = useState<ParshaData | null>(null)
-    const [matchingPlaylist, setMatchingPlaylist] = useState<Playlist | null>(null)
+    const [videosData, setVideosData] = useState<ParshaVideosResponse | null>(null)
     const [loading, setLoading] = useState(true)
+    const [loadingVideos, setLoadingVideos] = useState(false)
     const [error, setError] = useState<string | null>(null)
 
     useEffect(() => {
         async function fetchData() {
             try {
-                // Fetch current parsha and playlists in parallel
-                const [parshaRes, playlistsRes] = await Promise.all([
-                    fetch('/api/parsha'),
-                    fetch('/api/youtube/playlists')
-                ])
+                const parshaRes = await fetch('/api/parsha')
 
                 if (!parshaRes.ok) {
                     throw new Error('Failed to fetch parsha')
                 }
                 const parshaJson = await parshaRes.json() as ParshaData
                 setParshaData(parshaJson)
-
-                if (playlistsRes.ok) {
-                    const playlists: Playlist[] = await playlistsRes.json()
-
-                    // Find matching playlist for this parsha
-                    const match = playlists.find(p =>
-                        playlistMatchesParsha(p.title, parshaJson.parsha)
-                    )
-                    setMatchingPlaylist(match || null)
-                }
             } catch (err: any) {
                 console.error('Error loading parsha data:', err)
                 setError(err.message)
@@ -80,6 +57,24 @@ export default function ParshaAccordion() {
 
         fetchData()
     }, [])
+
+    // Load videos when accordion opens
+    useEffect(() => {
+        if (isOpen && parshaData && !videosData && !loadingVideos) {
+            setLoadingVideos(true)
+            fetch(`/api/parsha/videos?parsha=${encodeURIComponent(parshaData.parsha)}`)
+                .then(res => res.json() as Promise<ParshaVideosResponse>)
+                .then((data) => {
+                    setVideosData(data)
+                })
+                .catch(err => {
+                    console.error('Error loading parsha videos:', err)
+                })
+                .finally(() => {
+                    setLoadingVideos(false)
+                })
+        }
+    }, [isOpen, parshaData, videosData, loadingVideos])
 
     if (loading) {
         return (
@@ -132,30 +127,97 @@ export default function ParshaAccordion() {
                 <div
                     className={cn(
                         "transition-all duration-300 ease-in-out overflow-hidden border-t border-gray-100",
-                        isOpen ? "max-h-[500px] opacity-100" : "max-h-0 opacity-0 border-t-0"
+                        isOpen ? "max-h-[800px] opacity-100" : "max-h-0 opacity-0 border-t-0"
                     )}
                 >
                     <div className="p-4 md:p-5">
-                        {matchingPlaylist ? (
+                        {loadingVideos ? (
+                            <div className="flex items-center justify-center py-8 gap-3">
+                                <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                                <span className="text-muted-foreground">Loading shiurim...</span>
+                            </div>
+                        ) : videosData && videosData.videos.length > 0 ? (
+                            <div className="space-y-3">
+                                {/* Video List */}
+                                {videosData.videos.slice(0, 6).map((video) => (
+                                    <div
+                                        key={video.id}
+                                        className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 transition-colors"
+                                    >
+                                        <img
+                                            src={video.thumbnail || '/placeholder-thumb.jpg'}
+                                            alt={video.title}
+                                            className="w-20 h-12 object-cover rounded flex-shrink-0"
+                                        />
+                                        <div className="flex-1 min-w-0">
+                                            {video.slug ? (
+                                                <Link
+                                                    href={`/${video.slug}`}
+                                                    className="text-sm font-medium text-gray-800 hover:text-primary transition-colors line-clamp-2"
+                                                >
+                                                    {video.title}
+                                                </Link>
+                                            ) : (
+                                                <a
+                                                    href={`https://www.youtube.com/watch?v=${video.id}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-sm font-medium text-gray-800 hover:text-primary transition-colors line-clamp-2"
+                                                >
+                                                    {video.title}
+                                                </a>
+                                            )}
+                                            {video.duration && (
+                                                <p className="text-xs text-muted-foreground mt-0.5">{video.duration}</p>
+                                            )}
+                                        </div>
+                                        {video.slug ? (
+                                            <Link
+                                                href={`/${video.slug}`}
+                                                className="p-2 rounded-full bg-primary/10 text-primary hover:bg-primary hover:text-white transition-all flex-shrink-0"
+                                            >
+                                                <ExternalLink className="w-4 h-4" />
+                                            </Link>
+                                        ) : (
+                                            <a
+                                                href={`https://www.youtube.com/watch?v=${video.id}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="p-2 rounded-full bg-red-50 text-red-500 hover:bg-red-500 hover:text-white transition-all flex-shrink-0"
+                                            >
+                                                <Youtube className="w-4 h-4" />
+                                            </a>
+                                        )}
+                                    </div>
+                                ))}
+
+                                {/* View All Link */}
+                                {videosData.playlistUrl && videosData.videos.length > 6 && (
+                                    <a
+                                        href={videosData.playlistUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex items-center justify-center gap-2 mt-4 px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-500 hover:text-white transition-all font-medium text-sm"
+                                    >
+                                        <Youtube className="w-4 h-4" />
+                                        View all {videosData.videos.length} shiurim on YouTube
+                                    </a>
+                                )}
+                            </div>
+                        ) : videosData?.playlistUrl ? (
+                            // Fallback: Link to YouTube if we have playlist but no cached videos
                             <a
-                                href={matchingPlaylist.playlistUrl}
+                                href={videosData.playlistUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors border border-gray-100 group"
                             >
-                                {matchingPlaylist.thumbnail && (
-                                    <img
-                                        src={matchingPlaylist.thumbnail}
-                                        alt={matchingPlaylist.title}
-                                        className="w-24 h-14 object-cover rounded hidden md:block"
-                                    />
-                                )}
                                 <div className="flex-1">
                                     <h3 className="font-serif font-semibold text-primary group-hover:text-secondary transition-colors">
-                                        {matchingPlaylist.title}
+                                        {videosData.playlistTitle || parshaData.parsha}
                                     </h3>
                                     <p className="text-sm text-muted-foreground">
-                                        {matchingPlaylist.videoCount} videos on YouTube
+                                        Watch on YouTube
                                     </p>
                                 </div>
                                 <div className="p-3 bg-red-50 text-red-500 rounded-full group-hover:bg-red-500 group-hover:text-white transition-all transform group-hover:scale-110">

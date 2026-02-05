@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDb, getD1Database } from '@/lib/db'
-import { shiurim, platformLinks } from '@/lib/schema'
+import { shiurim, platformLinks, cachedVideos } from '@/lib/schema'
 import { eq } from 'drizzle-orm'
 import { YOUTUBE_API_KEY } from '@/lib/youtube'
 
@@ -43,7 +43,79 @@ export async function GET(
             )
         }
 
-        // Fetch all videos from the YouTube playlist
+        const d1 = await getD1Database()
+        if (!d1) {
+            return NextResponse.json({ error: 'Database not available' }, { status: 500 })
+        }
+        const db = getDb(d1)
+
+        // Try to get cached videos first
+        const cached = await db
+            .select()
+            .from(cachedVideos)
+            .where(eq(cachedVideos.playlistId, playlistId))
+            .all()
+
+        // Get platform links and shiurim for matching
+        const allLinks = await db.select().from(platformLinks).all()
+        const allShiurim = await db.select().from(shiurim).all()
+
+        // Create maps for quick lookup
+        const linksByShiurId = new Map(allLinks.map(l => [l.shiurId, l]))
+        const shiurIdToShiur = new Map(allShiurim.map(s => [s.id, s]))
+
+        // Map of YouTube video ID -> shiur data
+        const videoIdToData = new Map<string, { shiurId: string; slug: string | null; links: typeof allLinks[0] | null }>()
+        for (const link of allLinks) {
+            if (link.youtube) {
+                const match = link.youtube.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/v\/)([a-zA-Z0-9_-]{11})/)
+                if (match) {
+                    const shiur = shiurIdToShiur.get(link.shiurId)
+                    videoIdToData.set(match[1], {
+                        shiurId: link.shiurId,
+                        slug: shiur?.slug || null,
+                        links: link
+                    })
+                }
+            }
+        }
+
+        // If we have cached videos, use them
+        if (cached.length > 0) {
+            const videosWithLinks: VideoWithLinks[] = cached
+                .sort((a, b) => (a.position || 0) - (b.position || 0))
+                .map(video => {
+                    const data = videoIdToData.get(video.id)
+                    const links = data?.links
+
+                    return {
+                        id: video.id,
+                        title: video.title,
+                        thumbnail: video.thumbnail || '',
+                        duration: video.duration || '',
+                        position: video.position || 0,
+                        shiurId: video.shiurId || data?.shiurId || null,
+                        slug: data?.slug || null,
+                        platforms: {
+                            youtube: `https://www.youtube.com/watch?v=${video.id}`,
+                            youtubeMusic: links?.youtubeMusic || null,
+                            spotify: links?.spotify || null,
+                            apple: links?.apple || null,
+                            amazon: links?.amazon || null,
+                            pocket: links?.pocket || null,
+                            twentyFourSix: links?.twentyFourSix || null,
+                            castbox: links?.castbox || null
+                        }
+                    }
+                })
+
+            return NextResponse.json({
+                playlistId,
+                videos: videosWithLinks
+            })
+        }
+
+        // Fallback: Fetch from YouTube API
         const allVideos: PlaylistVideo[] = []
         let nextPageToken: string | null = null
 
@@ -102,64 +174,15 @@ export async function GET(
             nextPageToken = data.nextPageToken || null
         } while (nextPageToken)
 
-        // Now match videos to shiurim in the database
-        const d1 = await getD1Database()
-
-        if (!d1) {
-            // Return videos without platform links if DB not available
-            return NextResponse.json({
-                playlistId,
-                videos: allVideos.map(v => ({
-                    ...v,
-                    shiurId: null,
-                    slug: null,
-                    platforms: {
-                        youtube: `https://www.youtube.com/watch?v=${v.id}`,
-                        youtubeMusic: null,
-                        spotify: null,
-                        apple: null,
-                        amazon: null,
-                        pocket: null,
-                        twentyFourSix: null,
-                        castbox: null
-                    }
-                }))
-            })
-        }
-
-        const db = getDb(d1)
-
-        // Get all platform links from DB
-        const allLinks = await db.select().from(platformLinks).all()
-        const allShiurim = await db.select().from(shiurim).all()
-
-        // Create a map of YouTube video ID -> platform links
-        const videoIdToLinks = new Map<string, typeof allLinks[0]>()
-        const shiurIdToShiur = new Map<string, typeof allShiurim[0]>()
-
-        for (const shiur of allShiurim) {
-            shiurIdToShiur.set(shiur.id, shiur)
-        }
-
-        for (const link of allLinks) {
-            if (link.youtube) {
-                // Extract video ID from YouTube URL
-                const match = link.youtube.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/v\/)([a-zA-Z0-9_-]{11})/)
-                if (match) {
-                    videoIdToLinks.set(match[1], link)
-                }
-            }
-        }
-
         // Build response with matched platform links
         const videosWithLinks: VideoWithLinks[] = allVideos.map(video => {
-            const links = videoIdToLinks.get(video.id)
-            const shiur = links ? shiurIdToShiur.get(links.shiurId) : null
+            const data = videoIdToData.get(video.id)
+            const links = data?.links
 
             return {
                 ...video,
-                shiurId: links?.shiurId || null,
-                slug: shiur?.slug || null,
+                shiurId: data?.shiurId || null,
+                slug: data?.slug || null,
                 platforms: {
                     youtube: `https://www.youtube.com/watch?v=${video.id}`,
                     youtubeMusic: links?.youtubeMusic || null,

@@ -114,3 +114,32 @@ export type NewAnalyticsCache = typeof analyticsCache.$inferInsert
 
 export type PlatformSync = typeof platformSyncs.$inferSelect
 export type NewPlatformSync = typeof platformSyncs.$inferInsert
+
+// Cached YouTube playlists
+export const cachedPlaylists = sqliteTable('cached_playlists', {
+    id: text('id').primaryKey(), // YouTube playlist ID
+    title: text('title').notNull(),
+    description: text('description'),
+    thumbnail: text('thumbnail'),
+    videoCount: integer('video_count').default(0),
+    playlistUrl: text('playlist_url'),
+    category: text('category'), // Bereishis, Shemos, etc.
+    lastSynced: integer('last_synced', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+})
+
+// Cached YouTube videos within playlists
+export const cachedVideos = sqliteTable('cached_videos', {
+    id: text('id').primaryKey(), // YouTube video ID
+    playlistId: text('playlist_id').notNull().references(() => cachedPlaylists.id, { onDelete: 'cascade' }),
+    title: text('title').notNull(),
+    thumbnail: text('thumbnail'),
+    duration: text('duration'),
+    position: integer('position').default(0),
+    shiurId: text('shiur_id').references(() => shiurim.id), // Link to local shiur if matched
+})
+
+export type CachedPlaylist = typeof cachedPlaylists.$inferSelect
+export type NewCachedPlaylist = typeof cachedPlaylists.$inferInsert
+
+export type CachedVideo = typeof cachedVideos.$inferSelect
+export type NewCachedVideo = typeof cachedVideos.$inferInsert
