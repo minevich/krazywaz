@@ -235,7 +235,7 @@ export async function POST() {
                     duration: video.duration,
                     position: video.position,
                     shiurId: shiurId
-                })
+                }).onConflictDoNothing()
                 totalVideoCount++
             }
         }
