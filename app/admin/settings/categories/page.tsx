@@ -46,7 +46,7 @@ export default function CategoriesSettingsPage() {
         try {
             const res = await fetch('/api/admin/categories')
             const data = await res.json()
-            setCategories(data)
+            setCategories(data as Category[])
         } catch (error) {
             toast.error('Failed to load categories')
         } finally {
