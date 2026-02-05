@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Plus, Edit, Trash2, RefreshCw, LogOut, FileText, Search, Filter, X } from 'lucide-react'
+import { Plus, Edit, Trash2, RefreshCw, LogOut, FileText, Search, Filter, X, Wand2 } from 'lucide-react'
 import ShiurForm from './ShiurForm'
 import { useToast } from './Toast'
 import AdminStats from './AdminStats'
@@ -39,6 +39,7 @@ export default function AdminDashboard() {
   const [syncing, setSyncing] = useState(false)
   const [editingShiur, setEditingShiur] = useState<Shiur | null>(null)
   const [showForm, setShowForm] = useState(false)
+  const [autoFilling, setAutoFilling] = useState(false)
   const router = useRouter()
   const toast = useToast()
 
@@ -265,6 +266,44 @@ export default function AdminDashboard() {
             >
               <RefreshCw className="w-4 h-4" />
               Refresh Playlists
+            </button>
+            <button
+              onClick={async () => {
+                setAutoFilling(true)
+                try {
+                  const response = await fetch('/api/admin/auto-fill-links', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': 'Bearer admin'
+                    },
+                    body: JSON.stringify({ minSimilarity: 0.7 })
+                  })
+                  const data = await response.json() as {
+                    success?: boolean;
+                    error?: string;
+                    summary?: { updated: number; processed: number }
+                  }
+                  if (data.success) {
+                    toast.success(
+                      'Auto-fill complete!',
+                      `Updated ${data.summary?.updated ?? 0} of ${data.summary?.processed ?? 0} shiurim`
+                    )
+                    fetchShiurim() // Refresh the list
+                  } else {
+                    toast.error('Auto-fill failed', data.error || 'Unknown error')
+                  }
+                } catch (error: any) {
+                  toast.error('Auto-fill failed', error.message)
+                } finally {
+                  setAutoFilling(false)
+                }
+              }}
+              disabled={autoFilling}
+              className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
+            >
+              <Wand2 className={`w-4 h-4 ${autoFilling ? 'animate-pulse' : ''}`} />
+              {autoFilling ? 'Filling...' : 'Auto-Fill Links'}
             </button>
             <button
               onClick={handleLogout}
