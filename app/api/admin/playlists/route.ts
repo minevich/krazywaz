@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getD1Database, getDb } from '@/lib/db'
-import { customPlaylists, customPlaylistItems } from '@/lib/schema'
+import { customPlaylists, customPlaylistItems, cachedPlaylists } from '@/lib/schema'
 import { desc, sql, eq } from 'drizzle-orm'
 
 export const dynamic = 'force-dynamic'
@@ -29,7 +29,10 @@ export async function GET() {
             .orderBy(desc(customPlaylists.updatedAt))
             .all()
 
-        return NextResponse.json(playlists)
+        // Fetch synced playlists
+        const synced = await db.select().from(cachedPlaylists).orderBy(desc(cachedPlaylists.lastSynced)).all()
+
+        return NextResponse.json({ manual: playlists, synced })
     } catch (error: any) {
         console.error('Error fetching playlists:', error)
         return NextResponse.json({ error: error.message }, { status: 500 })

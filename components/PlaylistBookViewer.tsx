@@ -5,86 +5,6 @@ import { ChevronDown, ChevronUp, Loader2, ExternalLink } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 
-// Parsha names for each Chumash to match playlist titles
-const CHUMASH_PARSHAS: Record<string, string[]> = {
-    'Bereishis': [
-        'Bereishis', 'Bereshit', 'Genesis',
-        'Noach', 'Noah',
-        'Lech Lecha', 'Lech-Lecha',
-        'Vayera', 'Vayeira',
-        'Chayei Sarah', 'Chayei-Sarah', 'Chaye Sarah',
-        'Toldos', 'Toldot', 'Toledot',
-        'Vayetzei', 'Vayetze', 'Vayeitzei',
-        'Vayishlach', 'Vayishlah',
-        'Vayeshev', 'Vayeishev',
-        'Miketz', 'Mikeitz',
-        'Vayigash',
-        'Vayechi', 'Vaychi'
-    ],
-    'Shemos': [
-        'Shemos', 'Shemot', 'Exodus',
-        'Vaera', 'Va\'era', 'Va\'eira', 'Vaeira',
-        'Bo',
-        'Beshalach', 'Beshallach',
-        'Yisro', 'Yitro', 'Jethro',
-        'Mishpatim',
-        'Terumah', 'Trumah',
-        'Tetzaveh', 'Tetzave',
-        'Ki Tisa', 'Ki Tissa', 'Ki-Tisa', 'Ki Sisa',
-        'Vayakhel', 'Vayakeil',
-        'Pekudei', 'Pekude'
-    ],
-    'Vayikra': [
-        'Vayikra', 'Leviticus',
-        'Tzav', 'Tsav',
-        'Shemini', 'Shmini',
-        'Tazria', 'Tazri\'a',
-        'Metzora', 'Metzorah',
-        'Acharei Mot', 'Acharei', 'Achrei Mot',
-        'Kedoshim', 'Kdoshim',
-        'Emor',
-        'Behar', 'B\'har',
-        'Bechukotai', 'Bechukosai', 'Behukotai'
-    ],
-    'Bamidbar': [
-        'Bamidbar', 'Bemidbar', 'Numbers',
-        'Nasso', 'Naso',
-        'Behaalotecha', 'Beha\'alotcha', 'Behaalosecha',
-        'Shelach', 'Shlach', 'Sh\'lach',
-        'Korach', 'Korah',
-        'Chukat', 'Chukkat', 'Hukat', 'Chukas',
-        'Balak',
-        'Pinchas', 'Pinhas', 'Phineas',
-        'Matot', 'Matos',
-        'Masei', 'Masse', 'Masey'
-    ],
-    'Devarim': [
-        'Devarim', 'Deuteronomy', 'D\'varim', 'Dvorim',
-        'Vaetchanan', 'Va\'etchanan', 'Vaeschanan', 'Va\'eschanan', 'V\'eschanan',
-        'Eikev', 'Ekev',
-        'Reeh', 'Re\'eh', 'R\'eih',
-        'Shoftim', 'Shofetim',
-        'Ki Teitzei', 'Ki Tetzei', 'Ki Tetze', 'Ki-Teitzei', 'Ki Seitzei', 'Ki-Seitzei',
-        'Ki Tavo', 'Ki Savo', 'Ki-Tavo',
-        'Nitzavim', 'Nitsavim',
-        'Vayeilech', 'Vayelech',
-        'Haazinu', 'Ha\'azinu',
-        'Vezot Haberakhah', 'V\'zot Habracha', 'Zos Habracha'
-    ],
-    'Holidays': [
-        'Rosh Hashanah', 'Rosh Hashana',
-        'Yom Kippur',
-        'Sukkos', 'Sukkot',
-        'Chanukah', 'Hanukkah',
-        'Purim',
-        'Pesach', 'Passover',
-        'Shavuos', 'Shavuot',
-        'Tisha B\'Av', 'Tisha Bav', 'Three Weeks',
-        'Rosh Chodesh',
-        'Lag BaOmer'
-    ]
-}
-
 interface Playlist {
     id: string
     title: string
@@ -92,6 +12,7 @@ interface Playlist {
     thumbnail: string
     videoCount: number
     playlistUrl: string
+    category?: string
 }
 
 interface VideoWithLinks {
@@ -117,23 +38,6 @@ interface VideoWithLinks {
 interface CategoryData {
     name: string
     playlists: Playlist[]
-}
-
-function categorizePlaylist(title: string): string {
-    const lowerTitle = title.toLowerCase()
-        .replace(/^parshas\s+/, '')
-        .replace(/^parshat\s+/, '')
-        .replace(/^parsha\s+/, '')
-
-    for (const [chumash, parshas] of Object.entries(CHUMASH_PARSHAS)) {
-        for (const parsha of parshas) {
-            if (lowerTitle.includes(parsha.toLowerCase())) {
-                return chumash
-            }
-        }
-    }
-
-    return 'Misc'
 }
 
 // Custom SVG icons for platforms not in Font Awesome
@@ -215,78 +119,87 @@ export default function PlaylistBookViewer() {
     const [loadingPlaylist, setLoadingPlaylist] = useState<string | null>(null)
 
     useEffect(() => {
-        async function fetchPlaylists() {
+        async function fetchData() {
             try {
-                const response = await fetch('/api/youtube/playlists')
-                if (!response.ok) {
-                    throw new Error('Failed to fetch playlists')
-                }
+                // Fetch categories and playlists in parallel
+                const [catsResponse, playlistsResponse] = await Promise.all([
+                    fetch('/api/categories'),
+                    fetch('/api/youtube/playlists') // This now returns merged Manual + Synced
+                ])
 
-                const playlists: Playlist[] = await response.json()
+                if (!playlistsResponse.ok) throw new Error('Failed to fetch playlists')
 
-                // Filter out unwanted playlists (e.g. "Rabbi Kraz's Shiurim" which is a duplicate/auto-generated)
+                const systemCats: { name: string, rules: { name: string, keywords: string[] }[] }[] = await catsResponse.json()
+                const playlists: Playlist[] = await playlistsResponse.json()
+
+                // Filter out unwanted playlists
                 const filteredPlaylists = playlists.filter(p =>
                     !p.title.toLowerCase().includes("rabbi kraz's shiurim")
                 )
 
-                // Categorize playlists
-                const categoryMap: Record<string, Playlist[]> = {
-                    'Bereishis': [],
-                    'Shemos': [],
-                    'Vayikra': [],
-                    'Bamidbar': [],
-                    'Devarim': [],
-                    'Holidays': [],
-                    'Misc': []
+                // Initialize map with dynamic categories + Misc
+                const categoryMap: Record<string, Playlist[]> = {}
+                systemCats.forEach(c => categoryMap[c.name] = [])
+                categoryMap['Misc'] = []
+
+                // Function to find rule index for sorting
+                const getRuleIndex = (catName: string, title: string) => {
+                    const cat = systemCats.find(c => c.name === catName)
+                    if (!cat) return -1
+                    const lowerTitle = title.toLowerCase()
+                    return cat.rules.findIndex(rule =>
+                        rule.keywords.some(k => lowerTitle.includes(k.toLowerCase()))
+                    )
                 }
 
+                // Group playlists
                 for (const playlist of filteredPlaylists) {
-                    const category = categorizePlaylist(playlist.title)
-                    categoryMap[category].push(playlist)
+                    // Use existing category from DB if valid, else Misc
+                    // Note: 'category' field from API is trusted now
+                    const catName = playlist.category && categoryMap[playlist.category] ? playlist.category : 'Misc'
+                    categoryMap[catName].push(playlist)
                 }
 
-                // Convert to array and filter out empty categories
-                const categoriesArray: CategoryData[] = Object.entries(categoryMap)
-                    .filter(([_, playlists]) => playlists.length > 0)
-                    .map(([name, playlists]) => ({
-                        name,
-                        playlists: playlists.sort((a, b) => {
-                            // Get sorting index from CHUMASH_PARSHAS
-                            const parshaList = CHUMASH_PARSHAS[name] || []
+                // Build final array preserving system category order
+                const result: CategoryData[] = []
 
-                            const getIndex = (title: string) => {
-                                const lowerTitle = title.toLowerCase()
-                                    .replace(/^parshas\s+/, '')
-                                    .replace(/^parshat\s+/, '')
-                                    .replace(/^parsha\s+/, '')
+                // Add system categories in order
+                for (const sysCat of systemCats) {
+                    if (categoryMap[sysCat.name] && categoryMap[sysCat.name].length > 0) {
+                        result.push({
+                            name: sysCat.name,
+                            playlists: categoryMap[sysCat.name].sort((a, b) => {
+                                const idxA = getRuleIndex(sysCat.name, a.title)
+                                const idxB = getRuleIndex(sysCat.name, b.title)
 
-                                return parshaList.findIndex(p => lowerTitle.includes(p.toLowerCase()))
-                            }
+                                // Logic: matched rules come first in rule-order
+                                if (idxA !== -1 && idxB !== -1) return idxA - idxB
+                                if (idxA !== -1) return -1
+                                if (idxB !== -1) return 1
 
-                            const indexA = getIndex(a.title)
-                            const indexB = getIndex(b.title)
-
-                            // If both found, sort by index
-                            if (indexA !== -1 && indexB !== -1) return indexA - indexB
-                            // If only A found, A comes first
-                            if (indexA !== -1) return -1
-                            // If only B found, B comes first
-                            if (indexB !== -1) return 1
-
-                            // Fallback to alphabetical
-                            return a.title.localeCompare(b.title)
+                                return a.title.localeCompare(b.title)
+                            })
                         })
-                    }))
+                    }
+                }
 
-                setCategories(categoriesArray)
+                // Add Misc if not empty
+                if (categoryMap['Misc'].length > 0) {
+                    result.push({
+                        name: 'Misc',
+                        playlists: categoryMap['Misc'].sort((a, b) => a.title.localeCompare(b.title))
+                    })
+                }
+
+                setCategories(result)
             } catch (err: any) {
-                setError(err.message || 'Failed to load playlists')
+                setError(err.message || 'Failed to load data')
             } finally {
                 setLoading(false)
             }
         }
 
-        fetchPlaylists()
+        fetchData()
     }, [])
 
     const toggleCategory = (categoryName: string) => {

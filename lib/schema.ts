@@ -178,3 +178,29 @@ export type NewCustomPlaylist = typeof customPlaylists.$inferInsert
 
 export type CustomPlaylistItem = typeof customPlaylistItems.$inferSelect
 export type NewCustomPlaylistItem = typeof customPlaylistItems.$inferInsert
+
+// Dynamic System Categories
+export const systemCategories = sqliteTable('system_categories', {
+    id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+    name: text('name').notNull().unique(), // e.g., "Bereishis"
+    order: integer('order').notNull().default(0),
+    isHidden: integer('is_hidden', { mode: 'boolean' }).default(false),
+    createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).$defaultFn(() => new Date()).$onUpdate(() => new Date()),
+})
+
+export const systemCategoryRules = sqliteTable('system_category_rules', {
+    id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+    categoryId: text('category_id').notNull().references(() => systemCategories.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(), // e.g., "Noach"
+    keywords: text('keywords').notNull(), // JSON array of strings: '["Noach", "Noah"]'
+    order: integer('order').notNull().default(0),
+    createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).$defaultFn(() => new Date()).$onUpdate(() => new Date()),
+})
+
+export type SystemCategory = typeof systemCategories.$inferSelect
+export type NewSystemCategory = typeof systemCategories.$inferInsert
+
+export type SystemCategoryRule = typeof systemCategoryRules.$inferSelect
+export type NewSystemCategoryRule = typeof systemCategoryRules.$inferInsert
