@@ -69,6 +69,18 @@ const CHUMASH_PARSHAS: Record<string, string[]> = {
         'Vayeilech', 'Vayelech',
         'Haazinu', 'Ha\'azinu',
         'Vezot Haberakhah', 'V\'zot Habracha', 'Zos Habracha'
+    ],
+    'Holidays': [
+        'Rosh Hashanah', 'Rosh Hashana',
+        'Yom Kippur',
+        'Sukkos', 'Sukkot',
+        'Chanukah', 'Hanukkah',
+        'Purim',
+        'Pesach', 'Passover',
+        'Shavuos', 'Shavuot',
+        'Tisha B\'Av', 'Tisha Bav', 'Three Weeks',
+        'Rosh Chodesh',
+        'Lag BaOmer'
     ]
 }
 

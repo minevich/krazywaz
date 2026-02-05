@@ -5,6 +5,7 @@ import Footer from '@/components/Footer'
 import PlayButton from '@/components/PlayButton'
 import PlatformGrid from '@/components/PlatformGrid'
 import ParshaAccordion from '@/components/ParshaAccordion'
+import HolidaySelector from '@/components/HolidaySelector'
 import ViewCounter from '@/components/ViewCounter'
 import { Calendar, Clock, Info } from 'lucide-react'
 import { getDb, getD1Database } from '@/lib/db'
@@ -77,6 +78,11 @@ export default async function Home() {
         {/* This Week's Parsha Section */}
         <section className="mb-16">
           <ParshaAccordion />
+        </section>
+
+        {/* Jewish Holidays Section */}
+        <section className="mb-16">
+          <HolidaySelector />
         </section>
 
         <section className="mb-16">
