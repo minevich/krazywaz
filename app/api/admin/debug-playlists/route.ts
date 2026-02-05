@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { getD1Database, getDb } from '@/lib/db'
 import { cachedPlaylists } from '@/lib/schema'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
     try {
         const d1 = await getD1Database()
