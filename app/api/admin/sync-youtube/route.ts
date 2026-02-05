@@ -133,15 +133,19 @@ export async function POST() {
         }
 
         // Step 3: Don't clear cache - sync incrementally
-        // Get already synced playlists so we skip them
+        // Get already synced playlists and their videos
         const existingPlaylists = await db.select().from(cachedPlaylists).all()
         const existingPlaylistIds = new Set(existingPlaylists.map(p => p.id))
+        const existingVideos = await db.select().from(cachedVideos).all()
+        const playlistsWithVideos = new Set(existingVideos.map(v => v.playlistId))
 
         let totalVideoCount = 0
 
-        // Step 4: Process only NEW playlists (limit to 10 to stay within subrequest limit)
-        const newPlaylists = playlistsData.items.filter((p: any) => !existingPlaylistIds.has(p.id))
-        const playlistsToProcess = newPlaylists.slice(0, 10)
+        // Step 4: Process playlists that either don't exist OR have no videos yet
+        const playlistsNeedingSync = playlistsData.items.filter((p: any) =>
+            !existingPlaylistIds.has(p.id) || !playlistsWithVideos.has(p.id)
+        )
+        const playlistsToProcess = playlistsNeedingSync.slice(0, 5)
         for (const playlist of playlistsToProcess) {
             const playlistId = playlist.id
             const category = categorizePlaylist(playlist.snippet.title)
