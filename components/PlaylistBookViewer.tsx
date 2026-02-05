@@ -250,7 +250,32 @@ export default function PlaylistBookViewer() {
                     .filter(([_, playlists]) => playlists.length > 0)
                     .map(([name, playlists]) => ({
                         name,
-                        playlists: playlists.sort((a, b) => a.title.localeCompare(b.title))
+                        playlists: playlists.sort((a, b) => {
+                            // Get sorting index from CHUMASH_PARSHAS
+                            const parshaList = CHUMASH_PARSHAS[name] || []
+
+                            const getIndex = (title: string) => {
+                                const lowerTitle = title.toLowerCase()
+                                    .replace(/^parshas\s+/, '')
+                                    .replace(/^parshat\s+/, '')
+                                    .replace(/^parsha\s+/, '')
+
+                                return parshaList.findIndex(p => lowerTitle.includes(p.toLowerCase()))
+                            }
+
+                            const indexA = getIndex(a.title)
+                            const indexB = getIndex(b.title)
+
+                            // If both found, sort by index
+                            if (indexA !== -1 && indexB !== -1) return indexA - indexB
+                            // If only A found, A comes first
+                            if (indexA !== -1) return -1
+                            // If only B found, B comes first
+                            if (indexB !== -1) return 1
+
+                            // Fallback to alphabetical
+                            return a.title.localeCompare(b.title)
+                        })
                     }))
 
                 setCategories(categoriesArray)
