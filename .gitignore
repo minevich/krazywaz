@@ -1,58 +1,102 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
-# dependencies
-/node_modules
+# ============================================
+# Dependencies
+# ============================================
+node_modules/
 /.pnp
 .pnp.js
 
-# testing
-/coverage
-
-# next.js
+# ============================================
+# Next.js
+# ============================================
 /.next/
 /out/
-
-# production
-/build
-
-# misc
-.DS_Store
-*.pem
-
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# local env files
-.env*.local
-.env
-
-# vercel
-.vercel
-
-# typescript
-*.tsbuildinfo
 next-env.d.ts
 
-# prisma
+# ============================================
+# OpenNext / Cloudflare Workers
+# ============================================
+.open-next/
+.wrangler/
+.dev.vars
+
+# ============================================
+# Build & Production
+# ============================================
+/build/
+/dist/
+
+# ============================================
+# TypeScript
+# ============================================
+*.tsbuildinfo
+
+# ============================================
+# Testing
+# ============================================
+/coverage/
+
+# ============================================
+# Environment & Secrets
+# ============================================
+.env
+.env.*
+!.env.example
+!.env.template
+*.pem
+
+# ============================================
+# Database (SQLite / D1 local)
+# ============================================
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
 /dev.db
 /dev.db-journal
 prisma/dev.db
 prisma/dev.db-journal
-*.db
-*.db-journal
+.sqlite
 
-# embedded git repository
-/rabbikraz.github.io
+# ============================================
+# Logs
+# ============================================
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+build_debug.log
+push_error.log
 
-# cloudflare
-.wrangler
+# ============================================
+# OS Files
+# ============================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
 
-# Sensitive files
-*.txt
-!README.txt
+# ============================================
+# IDEs & Editors
+# ============================================
+.idea/
+*.swp
+*.swo
+*~
+*.sublime-project
+*.sublime-workspace
 
-# open-next
-.open-next
+# ============================================
+# Vercel
+# ============================================
+.vercel
 
+# ============================================
+# Misc
+# ============================================
+/rabbikraz.github.io/
