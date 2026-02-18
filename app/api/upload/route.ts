@@ -7,6 +7,7 @@ import { eq } from "drizzle-orm";
 const MAX_AUDIO_SIZE = 200 * 1024 * 1024; // 200MB
 const MAX_PDF_SIZE = 25 * 1024 * 1024; // 25MB
 const MAX_VIDEO_SIZE = 2 * 1024 * 1024 * 1024; // 2GB
+const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
 
 const ALLOWED_AUDIO_TYPES = [
   "audio/mpeg",
@@ -27,6 +28,12 @@ const ALLOWED_VIDEO_TYPES = [
   "video/webm",
   "video/x-msvideo",
   "video/x-matroska",
+];
+
+const ALLOWED_IMAGE_TYPES = [
+  "image/png",
+  "image/jpeg",
+  "image/webp",
 ];
 
 async function isAuthenticated(d1: D1Database) {
@@ -52,14 +59,15 @@ function sanitizeFilename(name: string): string {
     .replace(/^-|-$/g, "");
 }
 
-function getFileCategory(mimeType: string): "audio" | "pdf" | "video" | null {
+function getFileCategory(mimeType: string): "audio" | "pdf" | "video" | "image" | null {
   if (ALLOWED_AUDIO_TYPES.includes(mimeType)) return "audio";
   if (ALLOWED_PDF_TYPES.includes(mimeType)) return "pdf";
   if (ALLOWED_VIDEO_TYPES.includes(mimeType)) return "video";
+  if (ALLOWED_IMAGE_TYPES.includes(mimeType)) return "image";
   return null;
 }
 
-function getMaxSize(category: "audio" | "pdf" | "video"): number {
+function getMaxSize(category: "audio" | "pdf" | "video" | "image"): number {
   switch (category) {
     case "audio":
       return MAX_AUDIO_SIZE;
@@ -67,10 +75,12 @@ function getMaxSize(category: "audio" | "pdf" | "video"): number {
       return MAX_PDF_SIZE;
     case "video":
       return MAX_VIDEO_SIZE;
+    case "image":
+      return MAX_IMAGE_SIZE;
   }
 }
 
-function getR2Folder(category: "audio" | "pdf" | "video"): string {
+function getR2Folder(category: "audio" | "pdf" | "video" | "image"): string {
   switch (category) {
     case "audio":
       return "audio";
@@ -78,6 +88,8 @@ function getR2Folder(category: "audio" | "pdf" | "video"): string {
       return "pdfs";
     case "video":
       return "video";
+    case "image":
+      return "images";
   }
 }
 
@@ -117,7 +129,7 @@ export async function POST(request: NextRequest) {
     if (!category) {
       return NextResponse.json(
         {
-          error: `Unsupported file type: ${mimeType}. Allowed: audio (mp3, m4a, wav, aac, ogg), PDF, video (mp4, mov, webm, avi, mkv)`,
+          error: `Unsupported file type: ${mimeType}. Allowed: audio (mp3, m4a, wav, aac, ogg), PDF, video (mp4, mov, webm, avi, mkv), image (png, jpg, webp)`,
         },
         { status: 400 },
       );
