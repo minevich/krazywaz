@@ -23,7 +23,7 @@ binding = "ASSETS"
 # These are used when running `wrangler dev` locally
 [vars]
 NEXT_PUBLIC_BASE_URL = "http://localhost:8787"
-ADMIN_SETUP_TOKEN = "admin123"
+# ADMIN_SETUP_TOKEN — set via `wrangler secret` or .dev.vars, not here
 
 [build]
 command = "npm run build:worker"

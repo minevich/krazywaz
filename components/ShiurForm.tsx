@@ -101,6 +101,12 @@ export default function ShiurForm({
     setLoading(true);
     setError("");
 
+    if (!formData.audioUrl) {
+      setError("Audio is required. Upload an audio file or enter an audio URL.");
+      setLoading(false);
+      return;
+    }
+
     try {
       const payload = {
         guid: formData.guid || undefined,
@@ -249,13 +255,13 @@ export default function ShiurForm({
                 Video uploaded and ready
               </p>
               <p className="text-xs text-orange-600">
-                This video can be published to YouTube. Audio will be extracted
-                automatically.
+                This video can be published to YouTube. Upload an audio file
+                separately or enter an audio URL below.
               </p>
             </div>
             {!formData.audioUrl && (
               <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded font-medium">
-                ⚠️ Audio not yet extracted
+                ⚠️ Audio file still needed
               </span>
             )}
             <button

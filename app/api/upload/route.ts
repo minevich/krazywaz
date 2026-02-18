@@ -212,6 +212,11 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
+    // Prevent directory traversal
+    if (key.includes("..") || key.startsWith("/")) {
+      return NextResponse.json({ error: "Invalid key" }, { status: 400 });
+    }
+
     await bucket.delete(key);
 
     return NextResponse.json({ success: true });
