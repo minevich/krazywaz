@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb, getD1Database } from "@/lib/db";
 import { shiurim, platformLinks, users } from "@/lib/schema";
 import { cookies } from "next/headers";
-import { eq } from "drizzle-orm";
+import { eq, or, isNull } from "drizzle-orm";
 import { desc } from "drizzle-orm";
 
 async function isAuthenticated(d1: D1Database) {
@@ -33,12 +33,13 @@ export async function GET(request: NextRequest) {
 
     const db = getDb(d1);
 
-    // Fetch all shiurim with their platform links
-    const allShiurim = await db
-      .select()
-      .from(shiurim)
-      .orderBy(desc(shiurim.pubDate))
-      .all();
+    // Only show published shiurim to non-admin users
+    const isAdmin = await isAuthenticated(d1);
+    const query = db.select().from(shiurim);
+    if (!isAdmin) {
+      query.where(or(eq(shiurim.status, 'published'), isNull(shiurim.status)));
+    }
+    const allShiurim = await query.orderBy(desc(shiurim.pubDate)).all();
 
     // Fetch platform links separately
     const shiurimWithLinks = await Promise.all(
