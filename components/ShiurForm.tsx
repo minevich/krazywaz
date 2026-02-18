@@ -537,6 +537,16 @@ export default function ShiurForm({
                     {doc.url.split("/").pop()?.substring(0, 30) ||
                       doc.url.substring(0, 30)}
                   </span>
+                  {/* Clip in Source Manager */}
+                  {shiur?.id && (
+                    <Link
+                      href={`/admin/sources?shiurId=${shiur.id}&sourceUrl=${encodeURIComponent(doc.url)}`}
+                      className="flex-shrink-0 p-1 text-violet-500 hover:text-violet-700"
+                      title="Clip in Source Manager"
+                    >
+                      ✂️
+                    </Link>
+                  )}
                   {/* Move up */}
                   <button
                     type="button"
