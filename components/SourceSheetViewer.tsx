@@ -23,13 +23,35 @@ interface ExtractedSource {
     rotation?: number // Degrees (0, 90, 180, 270)
 }
 
+interface SourceDocumentData {
+    id: string
+    url: string
+    type: 'pdf' | 'image'
+    label?: string | null
+    position: number
+}
+
 interface SourceSheetViewerProps {
     sourceDoc?: string | null
     sourcesJson?: string | null
+    sourceDocuments?: SourceDocumentData[]
     title?: string
 }
 
-export default function SourceSheetViewer({ sourceDoc, sourcesJson, title }: SourceSheetViewerProps) {
+function isImageUrl(url: string): boolean {
+    return /\.(png|jpe?g|webp)(\?.*)?$/i.test(url)
+}
+
+function prepareEmbedUrl(url: string): string {
+    if (url.includes('dropbox.com')) {
+        return url.replace('?dl=0', '').replace('?dl=1', '') + '?raw=1'
+    } else if (url.includes('drive.google.com') && url.includes('/view')) {
+        return url.replace('/view', '/preview')
+    }
+    return url
+}
+
+export default function SourceSheetViewer({ sourceDoc, sourcesJson, sourceDocuments, title }: SourceSheetViewerProps) {
     const [allSources, setAllSources] = useState<ExtractedSource[]>([])
     const [expandedSources, setExpandedSources] = useState<Set<string>>(new Set())
     const [showPdf, setShowPdf] = useState(false)
@@ -38,7 +60,14 @@ export default function SourceSheetViewer({ sourceDoc, sourcesJson, title }: Sou
     // Lightbox State
     const [previewSource, setPreviewSource] = useState<ExtractedSource | null>(null)
 
-    const hasPdfUrl = !!sourceDoc
+    // Compute effective docs: use sourceDocuments if present, else fall back to legacy sourceDoc
+    const effectiveDocs: SourceDocumentData[] = (sourceDocuments && sourceDocuments.length > 0)
+        ? sourceDocuments
+        : sourceDoc
+            ? [{ id: '__legacy', url: sourceDoc, type: (isImageUrl(sourceDoc) ? 'image' : 'pdf') as 'pdf' | 'image', position: 0 }]
+            : []
+
+    const hasPdfUrl = effectiveDocs.length > 0 || !!sourceDoc
     const hasAnySources = allSources.length > 0
 
     // Load sources from JSON
@@ -58,18 +87,12 @@ export default function SourceSheetViewer({ sourceDoc, sourcesJson, title }: Sou
         }
     }, [sourcesJson])
 
-    // Prepare PDF URL
+    // Prepare PDF URL (legacy single doc)
     useEffect(() => {
-        if (sourceDoc) {
-            let url = sourceDoc
-            if (url.includes('dropbox.com')) {
-                url = url.replace('?dl=0', '').replace('?dl=1', '') + '?raw=1'
-            } else if (url.includes('drive.google.com') && url.includes('/view')) {
-                url = url.replace('/view', '/preview')
-            }
-            setEmbedUrl(url)
+        if (sourceDoc && effectiveDocs.length <= 1) {
+            setEmbedUrl(prepareEmbedUrl(sourceDoc))
         }
-    }, [sourceDoc])
+    }, [sourceDoc, effectiveDocs.length])
 
     // View Mode Logic: Default to Clipped if available
     useEffect(() => {
@@ -98,7 +121,7 @@ export default function SourceSheetViewer({ sourceDoc, sourcesJson, title }: Sou
         setExpandedSources(new Set())
     }
 
-    if (!hasAnySources && !hasPdfUrl) return null
+    if (!hasAnySources && !hasPdfUrl && effectiveDocs.length === 0) return null
 
     return (
         <>
@@ -108,7 +131,9 @@ export default function SourceSheetViewer({ sourceDoc, sourcesJson, title }: Sou
                     <div className="flex items-center gap-3">
                         <span className="text-2xl">📜</span>
                         <div>
-                            <h2 className="text-lg font-serif font-semibold text-primary">Source Sheet</h2>
+                            <h2 className="text-lg font-serif font-semibold text-primary">
+                                {effectiveDocs.length > 1 ? `Source Sheets (${effectiveDocs.length})` : 'Source Sheet'}
+                            </h2>
                             {hasAnySources && !showPdf && (
                                 <p className="text-muted-foreground text-xs">{allSources.length} sources</p>
                             )}
@@ -165,19 +190,19 @@ export default function SourceSheetViewer({ sourceDoc, sourcesJson, title }: Sou
                                         : 'text-gray-500 hover:text-gray-900'
                                         }`}
                                 >
-                                    PDF
+                                    Original
                                 </button>
                             </div>
                         )}
 
-                        {/* External Link */}
-                        {hasPdfUrl && (
+                        {/* External Link (only for single doc or legacy) */}
+                        {effectiveDocs.length === 1 && (
                             <a
-                                href={sourceDoc!}
+                                href={effectiveDocs[0].url}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="bg-gray-100 p-2 rounded-lg text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                                title="Open Original PDF in New Tab"
+                                title="Open Original in New Tab"
                             >
                                 <ExternalLink size={18} />
                             </a>
@@ -267,16 +292,44 @@ export default function SourceSheetViewer({ sourceDoc, sourcesJson, title }: Sou
                         </div>
                     )}
 
-                    {/* MODE: PDF VIEWER */}
-                    {(showPdf || (!hasAnySources && hasPdfUrl)) && embedUrl && (
-                        <div className="relative bg-slate-100">
-                            <iframe
-                                src={embedUrl ?? ''}
-                                className="w-full h-[800px] border-0"
-                                title={`Source Sheet: ${title}`}
-                                allowFullScreen
-                                loading="lazy"
-                            />
+                    {/* MODE: ORIGINAL SOURCE (PDF or Image) - Stacked multi-doc */}
+                    {(showPdf || (!hasAnySources && hasPdfUrl)) && effectiveDocs.length > 0 && (
+                        <div className="relative bg-slate-100 space-y-4">
+                            {effectiveDocs.map((doc) => (
+                                <div key={doc.id}>
+                                    {doc.label && effectiveDocs.length > 1 && (
+                                        <div className="px-5 pt-4 pb-1">
+                                            <h3 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                                                {doc.type === 'pdf' ? '📄' : '🖼️'} {doc.label}
+                                                <a href={doc.url} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:text-blue-700">
+                                                    <ExternalLink size={14} />
+                                                </a>
+                                            </h3>
+                                        </div>
+                                    )}
+                                    {doc.type === 'image' || isImageUrl(doc.url) ? (
+                                        <div
+                                            className="flex justify-center p-4 cursor-zoom-in"
+                                            onClick={() => setPreviewSource({ id: doc.id, name: doc.label || title || 'Source Sheet', image: doc.url })}
+                                        >
+                                            <img
+                                                src={doc.url}
+                                                alt={doc.label || `Source Sheet: ${title}`}
+                                                className="max-w-full max-h-[800px] object-contain rounded-lg shadow-sm"
+                                                loading="lazy"
+                                            />
+                                        </div>
+                                    ) : (
+                                        <iframe
+                                            src={prepareEmbedUrl(doc.url)}
+                                            className="w-full h-[800px] border-0"
+                                            title={doc.label || `Source Sheet: ${title}`}
+                                            allowFullScreen
+                                            loading="lazy"
+                                        />
+                                    )}
+                                </div>
+                            ))}
                         </div>
                     )}
                 </div>

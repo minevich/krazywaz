@@ -8,6 +8,14 @@ import ShiurForm from './ShiurForm'
 import { useToast } from './Toast'
 import AdminStats from './AdminStats'
 
+interface SourceDocEntry {
+  id: string
+  url: string
+  type: 'pdf' | 'image'
+  label?: string | null
+  position: number
+}
+
 interface Shiur {
   id: string
   guid: string
@@ -17,6 +25,8 @@ interface Shiur {
   audioUrl: string
   sourceDoc?: string | null
   sourcesJson?: string | null
+  sourceDocuments?: SourceDocEntry[]
+  sourceDocumentCount?: number
   pubDate: string
   duration?: string | null
   link?: string | null
@@ -47,6 +57,22 @@ export default function AdminDashboard() {
   const router = useRouter()
   const toast = useToast()
 
+  const handleEditShiur = async (shiur: Shiur) => {
+    // Fetch source documents for this shiur
+    try {
+      const res = await fetch(`/api/shiurim/${shiur.id}/source-documents`)
+      if (res.ok) {
+        const docs = await res.json() as SourceDocEntry[]
+        setEditingShiur({ ...shiur, sourceDocuments: docs })
+      } else {
+        setEditingShiur(shiur)
+      }
+    } catch {
+      setEditingShiur(shiur)
+    }
+    setShowForm(true)
+  }
+
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState('')
   const [dateFilter, setDateFilter] = useState<'all' | 'week' | 'month' | 'year'>('all')
@@ -75,7 +101,7 @@ export default function AdminDashboard() {
 
     // Source filter
     if (sourceFilter !== 'all') {
-      const hasSources = !!(shiur.sourcesJson || shiur.sourceDoc)
+      const hasSources = !!(shiur.sourcesJson || shiur.sourceDoc || (shiur.sourceDocumentCount && shiur.sourceDocumentCount > 0))
       if (sourceFilter === 'has-sources' && !hasSources) return false
       if (sourceFilter === 'no-sources' && hasSources) return false
     }
@@ -99,7 +125,7 @@ export default function AdminDashboard() {
       const now = new Date()
       return pubDate.getMonth() === now.getMonth() && pubDate.getFullYear() === now.getFullYear()
     }).length,
-    withSources: shiurim.filter(s => s.sourcesJson || s.sourceDoc).length,
+    withSources: shiurim.filter(s => s.sourcesJson || s.sourceDoc || (s.sourceDocumentCount && s.sourceDocumentCount > 0)).length,
     missingLinks: shiurim.filter(s => {
       const links = s.platformLinks
       if (!links) return true
@@ -461,10 +487,7 @@ export default function AdminDashboard() {
                           )}
                           {/* Hover Edit Button */}
                           <button
-                            onClick={() => {
-                              setEditingShiur(shiur)
-                              setShowForm(true)
-                            }}
+                            onClick={() => handleEditShiur(shiur)}
                             className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-primary hover:bg-primary/10 rounded transition-all"
                             title="Quick Edit"
                           >
@@ -500,14 +523,20 @@ export default function AdminDashboard() {
                               </button>
                             </div>
                           )}
-                          {/* PDF URL */}
+                          {/* PDF URL (legacy) */}
                           {shiur.sourceDoc && !shiur.sourceDoc.startsWith('sources:') && (
                             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                               📄 PDF
                             </span>
                           )}
+                          {/* Source Documents (new multi-doc) */}
+                          {!shiur.sourceDoc && shiur.sourceDocumentCount && shiur.sourceDocumentCount > 0 && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                              📄 {shiur.sourceDocumentCount} Doc{shiur.sourceDocumentCount > 1 ? 's' : ''}
+                            </span>
+                          )}
                           {/* None */}
-                          {!shiur.sourcesJson && !shiur.sourceDoc && (
+                          {!shiur.sourcesJson && !shiur.sourceDoc && !(shiur.sourceDocumentCount && shiur.sourceDocumentCount > 0) && (
                             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
                               None
                             </span>
@@ -545,10 +574,7 @@ export default function AdminDashboard() {
                             <FileText className="w-4 h-4" />
                           </Link>
                           <button
-                            onClick={() => {
-                              setEditingShiur(shiur)
-                              setShowForm(true)
-                            }}
+                            onClick={() => handleEditShiur(shiur)}
                             className="text-primary hover:text-primary/80"
                           >
                             <Edit className="w-4 h-4" />

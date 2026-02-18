@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDb, getD1Database } from '@/lib/db'
-import { shiurim, platformLinks, users } from '@/lib/schema'
+import { shiurim, platformLinks, sourceDocuments, users } from '@/lib/schema'
 import { cookies } from 'next/headers'
-import { eq, and, or, isNull } from 'drizzle-orm'
+import { eq, and, or, isNull, asc } from 'drizzle-orm'
 
 async function isAuthenticated(d1: D1Database) {
   const cookieStore = await cookies()
@@ -57,9 +57,18 @@ export async function GET(
       .where(eq(platformLinks.shiurId, id))
       .get()
 
+    // Fetch source documents
+    const sourceDocs = await db
+      .select()
+      .from(sourceDocuments)
+      .where(eq(sourceDocuments.shiurId, id))
+      .orderBy(asc(sourceDocuments.position))
+      .all()
+
     return NextResponse.json({
       ...shiur,
       platformLinks: links || null,
+      sourceDocuments: sourceDocs,
     })
   } catch (error) {
     console.error('Error fetching shiur:', error)
@@ -156,7 +165,14 @@ export async function PUT(
           .where(eq(platformLinks.shiurId, id))
           .get()
 
-        // 3. Delete Old Record (Cascades to links) to free up the 'guid' unique constraint
+        // 2b. Get existing source documents (cascade delete will wipe them)
+        const currentSourceDocs = await db
+          .select()
+          .from(sourceDocuments)
+          .where(eq(sourceDocuments.shiurId, id))
+          .all()
+
+        // 3. Delete Old Record (Cascades to links + source docs) to free up the 'guid' unique constraint
         await db.delete(shiurim).where(eq(shiurim.id, id)).execute()
 
         // 4. Create NEW record with NEW ID
@@ -193,6 +209,18 @@ export async function PUT(
             castbox: currentLinks.castbox,
             createdAt: currentLinks.createdAt,
             updatedAt: new Date(),
+          }).execute()
+        }
+
+        // 6. Restore Source Documents with New ID
+        for (const doc of currentSourceDocs) {
+          await db.insert(sourceDocuments).values({
+            shiurId: newId,
+            url: doc.url,
+            type: doc.type,
+            label: doc.label,
+            position: doc.position,
+            createdAt: doc.createdAt,
           }).execute()
         }
 
@@ -243,17 +271,25 @@ export async function PUT(
       }
     }
 
-    // Fetch the updated shiur with links
+    // Fetch the updated shiur with links and source documents
     const links = await db
       .select()
       .from(platformLinks)
       .where(eq(platformLinks.shiurId, newId))
       .get()
 
+    const sourceDocs = await db
+      .select()
+      .from(sourceDocuments)
+      .where(eq(sourceDocuments.shiurId, newId))
+      .orderBy(asc(sourceDocuments.position))
+      .all()
+
     return NextResponse.json({
       ...updatedShiur,
       newId: newId !== id ? newId : undefined, // Return new ID if changed so frontend can redirect
       platformLinks: links || null,
+      sourceDocuments: sourceDocs,
     })
   } catch (error) {
     console.error('Error updating shiur:', error)

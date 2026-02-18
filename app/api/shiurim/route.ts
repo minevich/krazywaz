@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, getD1Database } from "@/lib/db";
-import { shiurim, platformLinks, users } from "@/lib/schema";
+import { shiurim, platformLinks, sourceDocuments, users } from "@/lib/schema";
 import { cookies } from "next/headers";
-import { eq, or, isNull } from "drizzle-orm";
+import { eq, or, isNull, count } from "drizzle-orm";
 import { desc } from "drizzle-orm";
 
 async function isAuthenticated(d1: D1Database) {
@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
     }
     const allShiurim = await query.orderBy(desc(shiurim.pubDate)).all();
 
-    // Fetch platform links separately
+    // Fetch platform links and source document counts separately
     const shiurimWithLinks = await Promise.all(
       allShiurim.map(async (shiur) => {
         const links = await db
@@ -50,9 +50,16 @@ export async function GET(request: NextRequest) {
           .where(eq(platformLinks.shiurId, shiur.id))
           .get();
 
+        const docCountResult = await db
+          .select({ count: count() })
+          .from(sourceDocuments)
+          .where(eq(sourceDocuments.shiurId, shiur.id))
+          .get();
+
         return {
           ...shiur,
           platformLinks: links || null,
+          sourceDocumentCount: docCountResult?.count ?? 0,
         };
       }),
     );

@@ -144,12 +144,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Build the R2 object key
+    // Build the R2 object key using the original filename
     const timestamp = Date.now();
     const ext =
       file.name.split(".").pop() ||
       (category === "pdf" ? "pdf" : category === "video" ? "mp4" : "mp3");
-    const sanitized = sanitizeFilename(slug);
+    const nameWithoutExt = file.name.replace(/\.[^.]+$/, "");
+    const sanitized = sanitizeFilename(nameWithoutExt);
     const folder = getR2Folder(category);
     const key = `${folder}/${sanitized}-${timestamp}.${ext}`;
 
