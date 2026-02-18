@@ -31,6 +31,7 @@ interface Shiur {
     title: string
     slug: string
     sourcesJson?: string | null
+    sourceDoc?: string | null
 }
 
 type AppState = 'upload' | 'processing' | 'editing' | 'preview'
@@ -226,6 +227,7 @@ function SourcePreviewImage({ src, rotation, alt, style, className }: { src: str
 export default function SourceManager() {
     const searchParams = useSearchParams()
     const urlShiurId = searchParams.get('id') || searchParams.get('shiurId')
+    const sourceUrl = searchParams.get('sourceUrl')
 
     // Current File State (Visual Canvas)
     const [pages, setPages] = useState<PageData[]>([])
@@ -265,6 +267,10 @@ export default function SourceManager() {
     const [selectedShiurId, setSelectedShiurId] = useState<string | null>(urlShiurId)
     const [loadingShiurim, setLoadingShiurim] = useState(false)
 
+    // Existing source documents for selected shiur
+    const [existingDocs, setExistingDocs] = useState<Array<{ id: string; url: string; type: string; label?: string | null; position: number }>>([])
+    const [loadingDoc, setLoadingDoc] = useState(false)
+
     // Identification / Search
     const [identifyingId, setIdentifyingId] = useState<string | null>(null)
     const [identifyResults, setIdentifyResults] = useState<Array<{ sourceName: string, sefariaRef: string, previewText: string }> | null>(null)
@@ -286,7 +292,8 @@ export default function SourceManager() {
                         id: s.id,
                         title: s.title,
                         slug: s.slug,
-                        sourcesJson: s.sourcesJson
+                        sourcesJson: s.sourcesJson,
+                        sourceDoc: s.sourceDoc
                     })))
                 } else {
                     console.error('Unexpected shiurim response:', data)
@@ -299,6 +306,86 @@ export default function SourceManager() {
         loadShiurim()
     }, [])
 
+    // Load document from a URL (R2 or other) into the editor
+    const loadDocumentFromUrl = async (url: string) => {
+        setLoadingDoc(true)
+        setError(null)
+        try {
+            const res = await fetch(url)
+            if (!res.ok) throw new Error(`Failed to fetch document: ${res.status}`)
+            const blob = await res.blob()
+
+            // Detect content type: check response header, blob type, URL path, and magic bytes
+            let contentType = blob.type
+            if (!contentType || contentType === 'application/octet-stream') {
+                // Check URL path (strip query params)
+                const urlPath = url.split('?')[0].toLowerCase()
+                if (urlPath.endsWith('.pdf')) {
+                    contentType = 'application/pdf'
+                } else if (/\.(png|jpg|jpeg|gif|webp)$/.test(urlPath)) {
+                    contentType = 'image/png'
+                } else {
+                    // Check magic bytes: PDF starts with %PDF
+                    const header = new Uint8Array(await blob.slice(0, 5).arrayBuffer())
+                    if (header[0] === 0x25 && header[1] === 0x50 && header[2] === 0x44 && header[3] === 0x46) {
+                        contentType = 'application/pdf'
+                    } else {
+                        contentType = 'image/png'
+                    }
+                }
+            }
+
+            const filename = url.split('?')[0].split('/').pop() || 'document'
+            const file = new File([blob], filename, { type: contentType })
+            await handleFileUpload(file, { fromExistingUrl: true })
+        } catch (err) {
+            console.error('Failed to load document from URL:', err)
+            setError(`Failed to load document: ${err instanceof Error ? err.message : String(err)}`)
+        } finally {
+            setLoadingDoc(false)
+        }
+    }
+
+    // Fetch existing source documents when shiur is selected
+    useEffect(() => {
+        if (!selectedShiurId) {
+            setExistingDocs([])
+            return
+        }
+
+        const fetchDocs = async () => {
+            try {
+                const res = await fetch(`/api/shiurim/${selectedShiurId}/source-documents`)
+                if (res.ok) {
+                    const docs = await res.json()
+                    if (Array.isArray(docs)) {
+                        setExistingDocs(docs)
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to fetch source documents:', e)
+            }
+
+            // Also check legacy sourceDoc
+            const shiur = shiurim.find(s => s.id === selectedShiurId)
+            if (shiur?.sourceDoc && !shiur.sourceDoc.startsWith('sources:')) {
+                setExistingDocs(prev => {
+                    // Don't add if we already have docs from the API or if legacy URL is already in the list
+                    if (prev.some(d => d.url === shiur.sourceDoc)) return prev
+                    return [{ id: 'legacy-pdf', url: shiur.sourceDoc!, type: 'pdf', label: 'Original PDF', position: -1 }, ...prev]
+                })
+            }
+        }
+        fetchDocs()
+    }, [selectedShiurId, shiurim])
+
+    // Auto-load from sourceUrl query param on mount
+    useEffect(() => {
+        if (sourceUrl && selectedShiurId) {
+            loadDocumentFromUrl(sourceUrl)
+        }
+    }, [sourceUrl, selectedShiurId])
+
     // Handle Shiur Selection -> Auto-load existing sources
     useEffect(() => {
         if (!selectedShiurId) return
@@ -306,20 +393,9 @@ export default function SourceManager() {
         const shiur = shiurim.find(s => s.id === selectedShiurId)
         if (shiur?.sourcesJson) {
             try {
-                // If we already have sources, maybe ask user? For now, we append/overwrite?
-                // Logic: If user selects a new shiur, we should probably Clear current work and load the new one.
-                // UNLESS user has "New" stuff.
-                // Simpler: Just overwrite display with this Shiur's sources.
-                // User can then "Add PDF" to append.
-
                 const loaded = JSON.parse(shiur.sourcesJson) as Source[]
                 if (Array.isArray(loaded)) {
-                    // Mark as 'imported' implicitly because they likely won't match the empty 'pages' array
-                    // if we haven't loaded the PDF.
-                    // IMPORTANT: We must ensure IDs are unique if we merge later.
-                    // But here we are Replacing.
                     setSources(loaded)
-                    // If we have sources but no pages, go to Editing mode (Sidebar only view)
                     if (pages.length === 0) {
                         setAppState('editing')
                     }
@@ -348,16 +424,26 @@ export default function SourceManager() {
     // FILE HANDLING - APPEND MODE
     // ============================================================================
 
-    const handleFileUpload = async (file: File) => {
+    const handleFileUpload = async (file: File, options?: { fromExistingUrl?: boolean }) => {
         setError(null)
         setAppState('processing')
         setStatusMessage('Loading file...')
         try {
+            // Detect PDF by type first, then fall back to magic bytes (%PDF header)
+            let isPdf = file.type === 'application/pdf'
+            if (!isPdf) {
+                const header = new Uint8Array(await file.slice(0, 5).arrayBuffer())
+                isPdf = header[0] === 0x25 && header[1] === 0x50 && header[2] === 0x44 && header[3] === 0x46
+            }
+
             let pageData: PageData[]
-            if (file.type === 'application/pdf') {
+            if (isPdf) {
                 setStatusMessage('Converting PDF...')
                 pageData = await convertPdfToImages(file)
-                setUploadedPdfFiles(prev => [...prev, file])
+                // Only track for re-upload if this is a fresh local upload, not an existing doc
+                if (!options?.fromExistingUrl) {
+                    setUploadedPdfFiles(prev => [...prev, file])
+                }
             } else {
                 setStatusMessage('Loading image...')
                 pageData = [await convertImageToDataUrl(file)]
@@ -1065,6 +1151,38 @@ export default function SourceManager() {
                                 {error && <p className="text-red-600 mt-3 text-sm">{error}</p>}
                                 <input id="file-input" type="file" accept=".pdf,image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileUpload(f) }} />
                             </div>
+
+                            {/* Loading indicator for URL loading */}
+                            {loadingDoc && (
+                                <div className="mt-4 text-center text-sm text-blue-600 flex items-center justify-center gap-2">
+                                    <span className="animate-spin">⏳</span> Loading document...
+                                </div>
+                            )}
+
+                            {/* Existing source documents for selected shiur */}
+                            {existingDocs.length > 0 && !loadingDoc && (
+                                <div className="mt-6">
+                                    <p className="text-sm font-medium text-slate-600 mb-2">Or open an existing document:</p>
+                                    <div className="space-y-2">
+                                        {existingDocs.map((doc) => (
+                                            <button
+                                                key={doc.id}
+                                                onClick={(e) => { e.stopPropagation(); loadDocumentFromUrl(doc.url) }}
+                                                className="w-full flex items-center gap-3 px-4 py-3 bg-white border border-slate-200 rounded-lg hover:border-blue-400 hover:bg-blue-50/50 transition-all text-left group"
+                                            >
+                                                <span className="text-lg flex-shrink-0">{doc.type === 'pdf' ? '📄' : '🖼️'}</span>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="text-sm font-medium text-slate-700 group-hover:text-blue-700 truncate">
+                                                        {doc.label || doc.url.split('/').pop() || 'Document'}
+                                                    </div>
+                                                    <div className="text-xs text-slate-400 uppercase">{doc.type}</div>
+                                                </div>
+                                                <span className="text-slate-400 group-hover:text-blue-500 text-sm">Open →</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}

@@ -507,9 +507,12 @@ export default function AdminDashboard() {
                           {/* Clipped Sources */}
                           {shiur.sourcesJson && (
                             <div className="flex items-center gap-1">
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                              <Link
+                                href={`/admin/sources?shiurId=${shiur.id}`}
+                                className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 hover:bg-green-200 transition-colors"
+                              >
                                 📜 Clipped
-                              </span>
+                              </Link>
                               <button
                                 onClick={() => {
                                   if (confirm('Delete the clipped sources?')) {
@@ -525,15 +528,21 @@ export default function AdminDashboard() {
                           )}
                           {/* PDF URL (legacy) */}
                           {shiur.sourceDoc && !shiur.sourceDoc.startsWith('sources:') && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            <Link
+                              href={`/admin/sources?shiurId=${shiur.id}&sourceUrl=${encodeURIComponent(shiur.sourceDoc)}`}
+                              className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 hover:bg-blue-200 transition-colors"
+                            >
                               📄 PDF
-                            </span>
+                            </Link>
                           )}
                           {/* Source Documents (new multi-doc) */}
                           {!shiur.sourceDoc && shiur.sourceDocumentCount && shiur.sourceDocumentCount > 0 && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            <Link
+                              href={`/admin/sources?shiurId=${shiur.id}`}
+                              className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 hover:bg-blue-200 transition-colors"
+                            >
                               📄 {shiur.sourceDocumentCount} Doc{shiur.sourceDocumentCount > 1 ? 's' : ''}
-                            </span>
+                            </Link>
                           )}
                           {/* None */}
                           {!shiur.sourcesJson && !shiur.sourceDoc && !(shiur.sourceDocumentCount && shiur.sourceDocumentCount > 0) && (
