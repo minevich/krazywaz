@@ -93,22 +93,26 @@ export default function ShiurForm({
   const [addDocUrl, setAddDocUrl] = useState("");
 
   // Multi-document state: initialized from sourceDocuments or legacy sourceDoc
-  const [sourceDocuments, setSourceDocuments] = useState<SourceDocEntry[]>(() => {
-    if (shiur?.sourceDocuments && shiur.sourceDocuments.length > 0) {
-      return shiur.sourceDocuments;
-    }
-    if (shiur?.sourceDoc) {
-      const isImg = /\.(png|jpe?g|webp)(\?.*)?$/i.test(shiur.sourceDoc);
-      return [{
-        id: crypto.randomUUID(),
-        url: shiur.sourceDoc,
-        type: isImg ? "image" as const : "pdf" as const,
-        label: "",
-        position: 0,
-      }];
-    }
-    return [];
-  });
+  const [sourceDocuments, setSourceDocuments] = useState<SourceDocEntry[]>(
+    () => {
+      if (shiur?.sourceDocuments && shiur.sourceDocuments.length > 0) {
+        return shiur.sourceDocuments;
+      }
+      if (shiur?.sourceDoc) {
+        const isImg = /\.(png|jpe?g|webp)(\?.*)?$/i.test(shiur.sourceDoc);
+        return [
+          {
+            id: crypto.randomUUID(),
+            url: shiur.sourceDoc,
+            type: isImg ? ("image" as const) : ("pdf" as const),
+            label: "",
+            position: 0,
+          },
+        ];
+      }
+      return [];
+    },
+  );
 
   const handleBulkImport = (links: Record<string, string>) => {
     setFormData((prev) => ({
@@ -130,7 +134,9 @@ export default function ShiurForm({
     setError("");
 
     if (!formData.audioUrl) {
-      setError("Audio is required. Upload an audio file or enter an audio URL.");
+      setError(
+        "Audio is required. Upload an audio file or enter an audio URL.",
+      );
       setLoading(false);
       return;
     }
@@ -143,7 +149,8 @@ export default function ShiurForm({
         description: formData.description || undefined,
         blurb: formData.blurb || undefined,
         audioUrl: formData.audioUrl,
-        sourceDoc: sourceDocuments.length > 0 ? null : (formData.sourceDoc || null),
+        sourceDoc:
+          sourceDocuments.length > 0 ? null : formData.sourceDoc || null,
         sourcesJson: formData.sourcesJson || null,
         pubDate: formData.pubDate || new Date().toISOString(),
         duration: formData.duration || undefined,
@@ -199,7 +206,11 @@ export default function ShiurForm({
         if (!docRes.ok) {
           console.error("Failed to save source documents");
         }
-      } else if (shiurId && sourceDocuments.length === 0 && (shiur?.sourceDocuments?.length || shiur?.sourceDoc)) {
+      } else if (
+        shiurId &&
+        sourceDocuments.length === 0 &&
+        (shiur?.sourceDocuments?.length || shiur?.sourceDoc)
+      ) {
         // Clear source documents if all were removed
         await fetch(`/api/shiurim/${shiurId}/source-documents`, {
           method: "PUT",
@@ -486,41 +497,58 @@ export default function ShiurForm({
         {/* SOURCE DOCUMENTS SECTION */}
         <div className="border-t pt-6 mt-6">
           <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            📄 Source Documents {sourceDocuments.length > 0 && <span className="text-sm font-normal text-gray-500">({sourceDocuments.length})</span>}
+            📄 Source Documents{" "}
+            {sourceDocuments.length > 0 && (
+              <span className="text-sm font-normal text-gray-500">
+                ({sourceDocuments.length})
+              </span>
+            )}
           </h3>
 
           {/* Current documents list */}
           {sourceDocuments.length > 0 && (
             <div className="space-y-2 mb-4">
               {sourceDocuments.map((doc, idx) => (
-                <div key={doc.id} className="flex items-center gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <span className="text-lg flex-shrink-0">{doc.type === 'pdf' ? '📄' : '🖼️'}</span>
+                <div
+                  key={doc.id}
+                  className="flex items-center gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg"
+                >
+                  <span className="text-lg flex-shrink-0">
+                    {doc.type === "pdf" ? "📄" : "🖼️"}
+                  </span>
                   <input
                     type="text"
                     value={doc.label || ""}
                     onChange={(e) => {
-                      setSourceDocuments(prev => prev.map(d =>
-                        d.id === doc.id ? { ...d, label: e.target.value } : d
-                      ));
+                      setSourceDocuments((prev) =>
+                        prev.map((d) =>
+                          d.id === doc.id ? { ...d, label: e.target.value } : d,
+                        ),
+                      );
                     }}
                     placeholder="Label (optional)"
-                    className="flex-1 px-3 py-1.5 border border-blue-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="flex-1 min-w-0 px-3 py-1.5 border border-blue-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
-                  <span className="text-xs text-blue-600 truncate max-w-[200px]" title={doc.url}>
-                    {doc.url.split('/').pop()?.substring(0, 30) || doc.url.substring(0, 30)}
+
+                  <span
+                    className="text-xs text-blue-600 truncate max-w-[200px] flex-shrink-0"
+                    title={doc.url}
+                  >
+                    {doc.url.split("/").pop()?.substring(0, 30) ||
+                      doc.url.substring(0, 30)}
                   </span>
                   {/* Move up */}
                   <button
                     type="button"
                     disabled={idx === 0}
                     onClick={() => {
-                      setSourceDocuments(prev => {
+                      setSourceDocuments((prev) => {
                         const arr = [...prev];
                         [arr[idx - 1], arr[idx]] = [arr[idx], arr[idx - 1]];
                         return arr;
                       });
                     }}
-                    className="p-1 text-gray-500 hover:text-gray-700 disabled:opacity-30"
+                    className="flex-shrink-0 p-1 text-gray-500 hover:text-gray-700 disabled:opacity-30"
                     title="Move up"
                   >
                     ▲
@@ -530,13 +558,13 @@ export default function ShiurForm({
                     type="button"
                     disabled={idx === sourceDocuments.length - 1}
                     onClick={() => {
-                      setSourceDocuments(prev => {
+                      setSourceDocuments((prev) => {
                         const arr = [...prev];
                         [arr[idx], arr[idx + 1]] = [arr[idx + 1], arr[idx]];
                         return arr;
                       });
                     }}
-                    className="p-1 text-gray-500 hover:text-gray-700 disabled:opacity-30"
+                    className="flex-shrink-0 p-1 text-gray-500 hover:text-gray-700 disabled:opacity-30"
                     title="Move down"
                   >
                     ▼
@@ -545,9 +573,11 @@ export default function ShiurForm({
                   <button
                     type="button"
                     onClick={() => {
-                      setSourceDocuments(prev => prev.filter(d => d.id !== doc.id));
+                      setSourceDocuments((prev) =>
+                        prev.filter((d) => d.id !== doc.id),
+                      );
                     }}
-                    className="p-1 text-red-500 hover:text-red-700"
+                    className="flex-shrink-0 p-1 text-red-500 hover:text-red-700"
                     title="Remove"
                   >
                     ✕
@@ -568,13 +598,16 @@ export default function ShiurForm({
                 value=""
                 onUploadComplete={(url) => {
                   const isImg = /\.(png|jpe?g|webp)(\?.*)?$/i.test(url);
-                  setSourceDocuments(prev => [...prev, {
-                    id: crypto.randomUUID(),
-                    url,
-                    type: isImg ? "image" : "pdf",
-                    label: "",
-                    position: prev.length,
-                  }]);
+                  setSourceDocuments((prev) => [
+                    ...prev,
+                    {
+                      id: crypto.randomUUID(),
+                      url,
+                      type: isImg ? "image" : "pdf",
+                      label: "",
+                      position: prev.length,
+                    },
+                  ]);
                 }}
                 onClear={() => {}}
               />
@@ -595,14 +628,19 @@ export default function ShiurForm({
                     type="button"
                     onClick={() => {
                       if (!addDocUrl.trim()) return;
-                      const isImg = /\.(png|jpe?g|webp)(\?.*)?$/i.test(addDocUrl);
-                      setSourceDocuments(prev => [...prev, {
-                        id: crypto.randomUUID(),
-                        url: addDocUrl.trim(),
-                        type: isImg ? "image" : "pdf",
-                        label: "",
-                        position: prev.length,
-                      }]);
+                      const isImg = /\.(png|jpe?g|webp)(\?.*)?$/i.test(
+                        addDocUrl,
+                      );
+                      setSourceDocuments((prev) => [
+                        ...prev,
+                        {
+                          id: crypto.randomUUID(),
+                          url: addDocUrl.trim(),
+                          type: isImg ? "image" : "pdf",
+                          label: "",
+                          position: prev.length,
+                        },
+                      ]);
                       setAddDocUrl("");
                     }}
                     className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700"
