@@ -239,6 +239,9 @@ export default function SourceManager() {
     // Sources List (Can include legacy ones not on current canvas)
     const [sources, setSources] = useState<Source[]>([])
 
+    // Original PDF file(s) uploaded by the user (for uploading to R2 on save)
+    const [uploadedPdfFiles, setUploadedPdfFiles] = useState<File[]>([])
+
     // Tools
     const [drawMode, setDrawMode] = useState<DrawMode>('rectangle')
 
@@ -354,6 +357,7 @@ export default function SourceManager() {
             if (file.type === 'application/pdf') {
                 setStatusMessage('Converting PDF...')
                 pageData = await convertPdfToImages(file)
+                setUploadedPdfFiles(prev => [...prev, file])
             } else {
                 setStatusMessage('Loading image...')
                 pageData = [await convertImageToDataUrl(file)]
@@ -858,15 +862,35 @@ export default function SourceManager() {
             // Save as JSON string to sourcesJson field (separate from PDF link in sourceDoc)
             const sourcesJsonStr = JSON.stringify(sourceData)
 
+            // Upload original PDF to R2 if we have one
+            let pdfUrl: string | undefined
+            if (uploadedPdfFiles.length > 0) {
+                setStatusMessage('Uploading PDF to storage...')
+                const pdfFile = uploadedPdfFiles[0]
+                const pdfFormData = new FormData()
+                pdfFormData.append('file', pdfFile)
+                pdfFormData.append('slug', uploadSlug)
+                const pdfRes = await fetch('/api/upload', { method: 'POST', body: pdfFormData })
+                if (pdfRes.ok) {
+                    const pdfData = await pdfRes.json() as { url: string }
+                    pdfUrl = pdfData.url
+                } else {
+                    console.error('PDF upload failed, continuing without sourceDoc')
+                }
+            }
+
             // Save to the shiur
             setStatusMessage('Saving to shiur...')
+
+            const updateBody: Record<string, string> = { sourcesJson: sourcesJsonStr }
+            if (pdfUrl) {
+                updateBody.sourceDoc = pdfUrl
+            }
 
             const res = await fetch(`/api/shiurim/${selectedShiurId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    sourcesJson: sourcesJsonStr
-                })
+                body: JSON.stringify(updateBody)
             })
 
             if (!res.ok) {
