@@ -7,12 +7,13 @@ import {
   FileAudio,
   FileText,
   Film,
+  Image as ImageIcon,
   CheckCircle,
   AlertCircle,
   Loader2,
 } from "lucide-react";
 
-export type FileCategory = "audio" | "pdf" | "video";
+export type FileCategory = "audio" | "pdf" | "video" | "image";
 
 interface FileUploaderProps {
   /** Which file types to accept */
@@ -51,6 +52,7 @@ const ACCEPT_MAP: Record<FileCategory, string[]> = {
   audio: [".mp3", ".m4a", ".aac", ".wav", ".ogg"],
   pdf: [".pdf"],
   video: [".mp4", ".mov", ".webm", ".avi", ".mkv"],
+  image: [".png", ".jpg", ".jpeg", ".webp"],
 };
 
 const MIME_MAP: Record<FileCategory, string[]> = {
@@ -72,12 +74,14 @@ const MIME_MAP: Record<FileCategory, string[]> = {
     "video/x-msvideo",
     "video/x-matroska",
   ],
+  image: ["image/png", "image/jpeg", "image/webp"],
 };
 
 const ICON_MAP: Record<FileCategory, typeof FileAudio> = {
   audio: FileAudio,
   pdf: FileText,
   video: Film,
+  image: ImageIcon,
 };
 
 const COLOR_MAP: Record<
@@ -101,6 +105,12 @@ const COLOR_MAP: Record<
     border: "border-orange-300",
     text: "text-orange-700",
     accent: "text-orange-500",
+  },
+  image: {
+    bg: "bg-blue-50",
+    border: "border-blue-300",
+    text: "text-blue-700",
+    accent: "text-blue-500",
   },
 };
 

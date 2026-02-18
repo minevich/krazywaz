@@ -438,9 +438,9 @@ export default function ShiurForm({
             {/* PDF Source — Upload or URL */}
             <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
               <FileUploader
-                accept="pdf"
-                label="📎 Upload PDF Source Sheet"
-                helpText="Upload a PDF source sheet, or enter a URL below."
+                accept={["pdf", "image"]}
+                label="📎 Upload Source Sheet"
+                helpText="Upload a PDF or image source sheet, or enter a URL below."
                 slug={formData.slug || formData.title || "untitled"}
                 value={formData.sourceDoc}
                 onUploadComplete={(url) => {

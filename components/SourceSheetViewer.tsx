@@ -29,6 +29,10 @@ interface SourceSheetViewerProps {
     title?: string
 }
 
+function isImageUrl(url: string): boolean {
+    return /\.(png|jpe?g|webp)(\?.*)?$/i.test(url)
+}
+
 export default function SourceSheetViewer({ sourceDoc, sourcesJson, title }: SourceSheetViewerProps) {
     const [allSources, setAllSources] = useState<ExtractedSource[]>([])
     const [expandedSources, setExpandedSources] = useState<Set<string>>(new Set())
@@ -165,7 +169,7 @@ export default function SourceSheetViewer({ sourceDoc, sourcesJson, title }: Sou
                                         : 'text-gray-500 hover:text-gray-900'
                                         }`}
                                 >
-                                    PDF
+                                    Original
                                 </button>
                             </div>
                         )}
@@ -177,7 +181,7 @@ export default function SourceSheetViewer({ sourceDoc, sourcesJson, title }: Sou
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="bg-gray-100 p-2 rounded-lg text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                                title="Open Original PDF in New Tab"
+                                title="Open Original in New Tab"
                             >
                                 <ExternalLink size={18} />
                             </a>
@@ -267,16 +271,30 @@ export default function SourceSheetViewer({ sourceDoc, sourcesJson, title }: Sou
                         </div>
                     )}
 
-                    {/* MODE: PDF VIEWER */}
+                    {/* MODE: ORIGINAL SOURCE (PDF or Image) */}
                     {(showPdf || (!hasAnySources && hasPdfUrl)) && embedUrl && (
                         <div className="relative bg-slate-100">
-                            <iframe
-                                src={embedUrl ?? ''}
-                                className="w-full h-[800px] border-0"
-                                title={`Source Sheet: ${title}`}
-                                allowFullScreen
-                                loading="lazy"
-                            />
+                            {isImageUrl(sourceDoc!) ? (
+                                <div
+                                    className="flex justify-center p-4 cursor-zoom-in"
+                                    onClick={() => setPreviewSource({ id: '__sourceDoc', name: title || 'Source Sheet', image: sourceDoc! })}
+                                >
+                                    <img
+                                        src={sourceDoc!}
+                                        alt={`Source Sheet: ${title}`}
+                                        className="max-w-full max-h-[800px] object-contain rounded-lg shadow-sm"
+                                        loading="lazy"
+                                    />
+                                </div>
+                            ) : (
+                                <iframe
+                                    src={embedUrl ?? ''}
+                                    className="w-full h-[800px] border-0"
+                                    title={`Source Sheet: ${title}`}
+                                    allowFullScreen
+                                    loading="lazy"
+                                />
+                            )}
                         </div>
                     )}
                 </div>
