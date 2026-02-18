@@ -8,6 +8,14 @@ import ShiurForm from './ShiurForm'
 import { useToast } from './Toast'
 import AdminStats from './AdminStats'
 
+interface SourceDocEntry {
+  id: string
+  url: string
+  type: 'pdf' | 'image'
+  label?: string | null
+  position: number
+}
+
 interface Shiur {
   id: string
   guid: string
@@ -17,6 +25,7 @@ interface Shiur {
   audioUrl: string
   sourceDoc?: string | null
   sourcesJson?: string | null
+  sourceDocuments?: SourceDocEntry[]
   pubDate: string
   duration?: string | null
   link?: string | null
@@ -46,6 +55,22 @@ export default function AdminDashboard() {
   const bulkFileRef = React.useRef<HTMLInputElement>(null)
   const router = useRouter()
   const toast = useToast()
+
+  const handleEditShiur = async (shiur: Shiur) => {
+    // Fetch source documents for this shiur
+    try {
+      const res = await fetch(`/api/shiurim/${shiur.id}/source-documents`)
+      if (res.ok) {
+        const docs = await res.json() as SourceDocEntry[]
+        setEditingShiur({ ...shiur, sourceDocuments: docs })
+      } else {
+        setEditingShiur(shiur)
+      }
+    } catch {
+      setEditingShiur(shiur)
+    }
+    setShowForm(true)
+  }
 
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState('')
@@ -461,10 +486,7 @@ export default function AdminDashboard() {
                           )}
                           {/* Hover Edit Button */}
                           <button
-                            onClick={() => {
-                              setEditingShiur(shiur)
-                              setShowForm(true)
-                            }}
+                            onClick={() => handleEditShiur(shiur)}
                             className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-primary hover:bg-primary/10 rounded transition-all"
                             title="Quick Edit"
                           >
@@ -545,10 +567,7 @@ export default function AdminDashboard() {
                             <FileText className="w-4 h-4" />
                           </Link>
                           <button
-                            onClick={() => {
-                              setEditingShiur(shiur)
-                              setShowForm(true)
-                            }}
+                            onClick={() => handleEditShiur(shiur)}
                             className="text-primary hover:text-primary/80"
                           >
                             <Edit className="w-4 h-4" />

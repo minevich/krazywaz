@@ -8,8 +8,8 @@ import StickyAudioPlayer from '@/components/StickyAudioPlayer'
 import ViewCounter from '@/components/ViewCounter'
 import Footer from '@/components/Footer'
 import { getDb, getD1Database } from '@/lib/db'
-import { shiurim, platformLinks } from '@/lib/schema'
-import { eq, or, and, isNull } from 'drizzle-orm'
+import { shiurim, platformLinks, sourceDocuments } from '@/lib/schema'
+import { eq, or, and, isNull, asc } from 'drizzle-orm'
 
 // Mark as dynamic to avoid build-time database access
 export const dynamic = 'force-dynamic'
@@ -46,9 +46,18 @@ async function getShiurBySlug(slug: string) {
             .where(eq(platformLinks.shiurId, shiur.id))
             .get()
 
+        // Fetch source documents
+        const sourceDocs = await db
+            .select()
+            .from(sourceDocuments)
+            .where(eq(sourceDocuments.shiurId, shiur.id))
+            .orderBy(asc(sourceDocuments.position))
+            .all()
+
         return {
             ...shiur,
             platformLinks: links || null,
+            sourceDocuments: sourceDocs,
         }
     } catch (error) {
         console.error('Error fetching shiur:', error)
@@ -155,8 +164,8 @@ export default async function SlugPage({ params }: { params: Promise<{ slug: str
                 )}
 
                 {/* Source Sheet */}
-                {(shiur.sourceDoc || shiur.sourcesJson) && (
-                    <SourceSheetViewer sourceDoc={shiur.sourceDoc} sourcesJson={shiur.sourcesJson} title={shiur.title} />
+                {(shiur.sourceDoc || shiur.sourcesJson || shiur.sourceDocuments?.length > 0) && (
+                    <SourceSheetViewer sourceDoc={shiur.sourceDoc} sourcesJson={shiur.sourcesJson} sourceDocuments={shiur.sourceDocuments} title={shiur.title} />
                 )}
 
                 {/* Thumbnail at bottom - auto-pull from YouTube or use manual */}

@@ -879,23 +879,40 @@ export default function SourceManager() {
                 }
             }
 
-            // Save to the shiur
+            // Save clipped sources JSON to the shiur
             setStatusMessage('Saving to shiur...')
-
-            const updateBody: Record<string, string> = { sourcesJson: sourcesJsonStr }
-            if (pdfUrl) {
-                updateBody.sourceDoc = pdfUrl
-            }
 
             const res = await fetch(`/api/shiurim/${selectedShiurId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(updateBody)
+                body: JSON.stringify({ sourcesJson: sourcesJsonStr })
             })
 
             if (!res.ok) {
                 const errData = await res.json() as { error?: string }
                 throw new Error(errData.error || 'Failed to update shiur')
+            }
+
+            // If we have a PDF, add it to source documents via the new endpoint
+            if (pdfUrl) {
+                setStatusMessage('Adding PDF to source documents...')
+                // Fetch existing source documents
+                const existingDocsRes = await fetch(`/api/shiurim/${selectedShiurId}/source-documents`)
+                const existingDocs = existingDocsRes.ok
+                    ? await existingDocsRes.json() as Array<{ id: string; url: string; type: string; label?: string; position: number }>
+                    : []
+
+                // Append the new PDF
+                const newDocs = [
+                    ...existingDocs.map((d: any) => ({ url: d.url, type: d.type, label: d.label, position: d.position })),
+                    { url: pdfUrl, type: 'pdf', label: '', position: existingDocs.length }
+                ]
+
+                await fetch(`/api/shiurim/${selectedShiurId}/source-documents`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ documents: newDocs })
+                })
             }
 
             setStatusMessage(`✓ Applied to "${shiur?.title}"`)

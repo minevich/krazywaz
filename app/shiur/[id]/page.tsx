@@ -8,8 +8,8 @@ import StickyAudioPlayer from '@/components/StickyAudioPlayer'
 import ViewCounter from '@/components/ViewCounter'
 import Footer from '@/components/Footer'
 import { getDb, getD1Database } from '@/lib/db'
-import { shiurim, platformLinks } from '@/lib/schema'
-import { eq, and, or, isNull } from 'drizzle-orm'
+import { shiurim, platformLinks, sourceDocuments } from '@/lib/schema'
+import { eq, and, or, isNull, asc } from 'drizzle-orm'
 
 // Mark as dynamic to avoid build-time database access
 export const dynamic = 'force-dynamic'
@@ -43,9 +43,18 @@ async function getShiur(id: string) {
       .where(eq(platformLinks.shiurId, id))
       .get()
 
+    // Fetch source documents
+    const sourceDocs = await db
+      .select()
+      .from(sourceDocuments)
+      .where(eq(sourceDocuments.shiurId, id))
+      .orderBy(asc(sourceDocuments.position))
+      .all()
+
     return {
       ...shiur,
       platformLinks: links || null,
+      sourceDocuments: sourceDocs,
       shouldRedirect: shiur.slug ? `/${shiur.slug}` : null, // Redirect to slug URL if exists
     }
   } catch (error) {
@@ -154,10 +163,11 @@ export default async function ShiurPage({ params }: { params: Promise<{ id: stri
         )}
 
         {/* Source Sheet - Main Focus */}
-        {(shiur.sourceDoc || shiur.sourcesJson) && (
+        {(shiur.sourceDoc || shiur.sourcesJson || shiur.sourceDocuments?.length > 0) && (
           <SourceSheetViewer
             sourceDoc={shiur.sourceDoc}
             sourcesJson={shiur.sourcesJson}
+            sourceDocuments={shiur.sourceDocuments}
             title={shiur.title}
           />
         )}

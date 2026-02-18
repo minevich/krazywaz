@@ -39,6 +39,19 @@ export const shiurim = sqliteTable('shiurim', {
         .$onUpdate(() => new Date()),
 })
 
+export const sourceDocuments = sqliteTable('source_documents', {
+    id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+    shiurId: text('shiur_id').notNull().references(() => shiurim.id, { onDelete: 'cascade' }),
+    url: text('url').notNull(),
+    type: text('type').$type<'pdf' | 'image'>().notNull(),
+    label: text('label'),
+    position: integer('position').notNull().default(0),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+})
+
+export type SourceDocument = typeof sourceDocuments.$inferSelect
+export type NewSourceDocument = typeof sourceDocuments.$inferInsert
+
 export const platformLinks = sqliteTable('platform_links', {
     id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
     shiurId: text('shiur_id')
