@@ -46,6 +46,7 @@ Create a `.dev.vars` file in the project root (this is gitignored):
 ADMIN_SETUP_TOKEN=your-setup-token
 RSS_FEED_URL=https://your-podcast-rss-feed.com/feed.xml
 YOUTUBE_API_KEY=your-youtube-api-key
+OCR_SPACE_API_KEY=your-ocr-space-api-key
 ```
 
 The `wrangler.toml` already configures the D1 database and R2 bucket bindings for local dev.
@@ -79,7 +80,7 @@ curl -X POST http://localhost:8787/api/admin/create-user \
 
 Then log in at `http://localhost:8787/admin`.
 
-### Resetting the local database
+### Resetting the local database (if needed)
 
 ```bash
 rm -rf .wrangler/state
@@ -125,6 +126,10 @@ wrangler secret put YOUTUBE_API_KEY
 ```
 
 ### 6. Deploy
+
+The best option is to configure Cloudflare Pages to deploy from this repository automatically.
+
+Alternatively, you can deploy manually:
 
 ```bash
 npm run deploy
