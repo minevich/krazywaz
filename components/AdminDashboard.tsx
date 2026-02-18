@@ -407,18 +407,16 @@ export default function AdminDashboard() {
           </button>
         </div>
 
-        {showForm && (
+        {showForm && !editingShiur && (
           <div className="mb-8">
             <ShiurForm
-              shiur={editingShiur}
+              shiur={null}
               onSuccess={() => {
                 setShowForm(false)
-                setEditingShiur(null)
                 fetchShiurim()
               }}
               onCancel={() => {
                 setShowForm(false)
-                setEditingShiur(null)
               }}
             />
           </div>
