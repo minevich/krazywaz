@@ -26,6 +26,7 @@ interface Shiur {
   sourceDoc?: string | null
   sourcesJson?: string | null
   sourceDocuments?: SourceDocEntry[]
+  sourceDocumentCount?: number
   pubDate: string
   duration?: string | null
   link?: string | null
@@ -100,7 +101,7 @@ export default function AdminDashboard() {
 
     // Source filter
     if (sourceFilter !== 'all') {
-      const hasSources = !!(shiur.sourcesJson || shiur.sourceDoc)
+      const hasSources = !!(shiur.sourcesJson || shiur.sourceDoc || (shiur.sourceDocumentCount && shiur.sourceDocumentCount > 0))
       if (sourceFilter === 'has-sources' && !hasSources) return false
       if (sourceFilter === 'no-sources' && hasSources) return false
     }
@@ -124,7 +125,7 @@ export default function AdminDashboard() {
       const now = new Date()
       return pubDate.getMonth() === now.getMonth() && pubDate.getFullYear() === now.getFullYear()
     }).length,
-    withSources: shiurim.filter(s => s.sourcesJson || s.sourceDoc).length,
+    withSources: shiurim.filter(s => s.sourcesJson || s.sourceDoc || (s.sourceDocumentCount && s.sourceDocumentCount > 0)).length,
     missingLinks: shiurim.filter(s => {
       const links = s.platformLinks
       if (!links) return true
@@ -522,14 +523,20 @@ export default function AdminDashboard() {
                               </button>
                             </div>
                           )}
-                          {/* PDF URL */}
+                          {/* PDF URL (legacy) */}
                           {shiur.sourceDoc && !shiur.sourceDoc.startsWith('sources:') && (
                             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                               📄 PDF
                             </span>
                           )}
+                          {/* Source Documents (new multi-doc) */}
+                          {!shiur.sourceDoc && shiur.sourceDocumentCount && shiur.sourceDocumentCount > 0 && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                              📄 {shiur.sourceDocumentCount} Doc{shiur.sourceDocumentCount > 1 ? 's' : ''}
+                            </span>
+                          )}
                           {/* None */}
-                          {!shiur.sourcesJson && !shiur.sourceDoc && (
+                          {!shiur.sourcesJson && !shiur.sourceDoc && !(shiur.sourceDocumentCount && shiur.sourceDocumentCount > 0) && (
                             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
                               None
                             </span>
