@@ -373,12 +373,12 @@ export default function ShiurForm({
                 Or enter audio URL manually
               </summary>
               <input
-                type="url"
+                type="text"
                 value={formData.audioUrl}
                 onChange={(e) =>
                   setFormData({ ...formData, audioUrl: e.target.value })
                 }
-                placeholder="https://..."
+                placeholder="https://... or /api/media/..."
                 className="mt-2 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm"
               />
             </details>
@@ -456,7 +456,7 @@ export default function ShiurForm({
                   Or enter PDF URL manually
                 </summary>
                 <input
-                  type="url"
+                  type="text"
                   value={formData.sourceDoc}
                   onChange={(e) => {
                     const val = e.target.value;
